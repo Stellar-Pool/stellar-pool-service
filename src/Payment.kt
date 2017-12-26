@@ -1,10 +1,11 @@
 package it.menzani.stellarpool
 
 import com.google.gson.Gson
+import it.menzani.stellarpool.serialization.TransactionResult
+import it.menzani.stellarpool.serialization.parseJson
 import org.stellar.sdk.*
 import org.stellar.sdk.responses.AccountResponse
 import org.stellar.sdk.responses.SubmitTransactionResponse
-import java.io.InputStreamReader
 import java.net.URL
 import java.net.URLEncoder
 import java.util.*
@@ -20,7 +21,7 @@ private fun multipleTestnetPayments() {
     val payment = Payment(
             sourceSecretSeed = String(paymentExecutor.sender.secretSeed),
             executor = paymentExecutor)
-    for (i in 1..5000) {
+    for (i in 1..200) {
         payment.addDestination(
                 destinationAccountId = paymentExecutor.receiver.accountId,
                 amount = "0.0000001")
@@ -42,8 +43,12 @@ fun singleMainnetPayment() {
             destinationAccountId = destination.accountId,
             amount = "0.0000001")
 
+    print("Destination account balance is ")
+    paymentExecutor.printBalance(destination)
     payment.send()
-    println("Destination account balance is:")
+    println("Wait 10 seconds...")
+    Thread.sleep(10000)
+    print("Destination account balance is ")
     paymentExecutor.printBalance(destination)
 }
 
@@ -88,7 +93,7 @@ interface PaymentExecutor {
     fun printBalance(keyPair: KeyPair) {
         val account: AccountResponse = accountOf(keyPair)
         for (balance in account.balances) {
-            println("  Type: ${balance.assetType}, Code: ${balance.assetCode}, Balance: ${balance.balance}")
+            println("{Type: ${balance.assetType}, Code: ${balance.assetCode}, Balance: ${balance.balance}}")
         }
     }
 }
@@ -117,9 +122,9 @@ class TestPaymentExecutor : PaymentExecutor {
     }
 
     fun printBalances() {
-        println("Sender account balance is:")
+        print("Sender account balance is ")
         printBalance(sender)
-        println("Receiver account balance is:")
+        print("Receiver account balance is ")
         printBalance(receiver)
     }
     // ==============
@@ -136,14 +141,9 @@ class ProductionPaymentExecutor : PaymentExecutor {
     override fun makeTransaction(transaction: Transaction) {
         val blob = URLEncoder.encode(transaction.toEnvelopeXdrBase64(), "UTF-8")
         val stream = URL("http://localhost:11626/tx?blob=$blob").openStream()
-        val result = gson.fromJson(InputStreamReader(stream, "UTF-8"), TransactionResult::class.java)
-        assert(result.status == "PENDING", { "Transaction failed with result: $result" })
+        val result = parseJson<TransactionResult>(stream)
+        assert(result.status == "PENDING", { "Transaction failed." })
     }
 
     override fun accountOf(keyPair: KeyPair): AccountResponse = server.accounts().account(keyPair)
-
-    data class TransactionResult(
-            val status: String,
-            val exception: String
-    )
 }
