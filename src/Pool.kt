@@ -18,6 +18,10 @@ val INTEGRAL_FORMATTER: NumberFormat = NumberFormat.getNumberInstance()
 val DECIMAL_FORMATTER: NumberFormat = DecimalFormat.getNumberInstance()
 
 fun main(args: Array<String>) {
+    run(args)
+}
+
+private fun run(args: Array<String>) {
     val prize: StellarCurrency
     if (args.isEmpty()) {
         println("Syntax: <prize> <bank> [fee] [fee collector]")
@@ -32,7 +36,7 @@ fun main(args: Array<String>) {
     val feeCollector = Account(if (args.size == 1) FEE_COLLECTOR else args[1])
 
     Class.forName("org.postgresql.Driver")
-    val connection = DriverManager.getConnection("jdbc:postgresql://localhost:5432/stellar", "postgres", "45822902")
+    val connection = DriverManager.getConnection("jdbc:postgresql://localhost:5432/stellar", "postgres", "sKzwnrYLumJA2sHVQ9j7YEMw")
     connection.autoCommit = false
 
     println("============================[ General info ]============================")
@@ -47,14 +51,14 @@ fun main(args: Array<String>) {
 
     val minVotes = StellarCurrency(circulatingSupply.stroops / 2000) // Or multiply by 0.0005
     println("Minimum number of votes is $minVotes")
-    println("============================[ Program input ]============================")
+    println("============================[ Summary ]============================")
     if (totalVotes <= minVotes) {
         println("Threshold has not been reached.")
         return
     }
     println("Distributing $prize")
     println("Paying fees to ${feeCollector.address}")
-    println("============================[ Program output ]============================")
+    println("============================[ Distribution ]============================")
 
     var totalRewards = 0L
     for (account in getVoters(connection)) {
@@ -69,7 +73,7 @@ fun main(args: Array<String>) {
         }
     }
 
-    println("============================[ Summary ]============================")
+    println("============================[ Security checks ]============================")
     println("Sum of actual rewards given is ${StellarCurrency(totalRewards)}")
     val delta = totalRewards - prize.stroops
     val deltaDescription = when {
@@ -125,7 +129,7 @@ class Account(val address: String, val balance: StellarCurrency? = null) {
     }
 
     fun pay(amount: StellarCurrency, percentOfPrize: Percent) {
-        assert(balance != null, { "Could not call pay() when balance is null." })
+        assert(balance != null, { "Cannot call pay() when balance is null." })
 
         if (amount >= StellarCurrency(10.0) || percentOfPrize >= Percent(1.0)) {
             println("Pay $amount ($percentOfPrize of prize) to $this")
