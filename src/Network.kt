@@ -15,45 +15,53 @@ fun main(args: Array<String>) {
 
 // Can be executed locally
 private fun multipleTestnetPayments() {
-    val paymentExecutor = TestPaymentExecutor()
+    val testNetwork = TestNetwork()
 
-    val payment = Payment(
-            sourceSecretSeed = String(paymentExecutor.sender.secretSeed),
-            executor = paymentExecutor)
-    for (i in 1..200) {
-        payment.addDestination(
-                destinationAccountId = paymentExecutor.receiver.accountId,
-                amount = "0.0000001")
+    val payment = Payment(testNetwork, String(testNetwork.sender.secretSeed))
+    for (i in 1..150) {
+        payment.addDestination(testNetwork.receiver.accountId, "0.0000001")
     }
 
+    testNetwork.printBalances()
     payment.send()
-    paymentExecutor.printBalances()
+    println("Wait 10 seconds...")
+    Thread.sleep(10000)
+    testNetwork.printBalances()
 }
 
 // Must be executed on the host running Stellar Core
-fun singleMainnetPayment() {
-    val paymentExecutor = ProductionPaymentExecutor()
+fun runInflation(sourceSecretSeed: String, memoText: String) {
+    val productionNetwork = ProductionNetwork()
+    val executorKeys = KeyPair.fromSecretSeed(sourceSecretSeed)
+    val executor: AccountResponse = productionNetwork.accountOf(executorKeys)
+    val transaction = Transaction.Builder(executor)
+            .addOperation(InflationOperation())
+            .addMemo(Memo.text(memoText))
+            .build()
+    transaction.sign(executorKeys)
+    productionNetwork.makeTransaction(transaction)
+}
 
-    val payment = Payment(
-            sourceSecretSeed = "SCQXGVXBSQHQQ2WYQSODQF6BL6DKKINAFSAF7B5GU72G3USBPJSUIBI4",
-            executor = paymentExecutor)
-    val destination = KeyPair.fromAccountId("GAJOC4WSOL3VUHYTEQPSOY54LP3XDWBS3AEZZ4DH24NEOHBBMEQKK7I7")
-    payment.addDestination(
-            destinationAccountId = destination.accountId,
-            amount = "0.0000001")
+fun singleMainnetPayment(sourceSecretSeed: String, destinationAccountId: String) {
+    val productionNetwork = ProductionNetwork()
+
+    val payment = Payment(productionNetwork, sourceSecretSeed)
+    val destination = KeyPair.fromAccountId(destinationAccountId)
+    payment.addDestination(destination.accountId, "0.0000001")
 
     print("Destination account balance is ")
-    paymentExecutor.printBalance(destination)
+    productionNetwork.printBalance(destination)
     payment.send()
     println("Wait 10 seconds...")
     Thread.sleep(10000)
     print("Destination account balance is ")
-    paymentExecutor.printBalance(destination)
+    productionNetwork.printBalance(destination)
 }
+// ===================================================
 
-class Payment(sourceSecretSeed: String, memoText: String? = null, val executor: PaymentExecutor) {
+class Payment(val network: Network, sourceSecretSeed: String, memoText: String? = null) {
     val sourceKeys: KeyPair = KeyPair.fromSecretSeed(sourceSecretSeed)
-    val sourceAccount: AccountResponse = executor.accountOf(sourceKeys)
+    val sourceAccount: AccountResponse = network.accountOf(sourceKeys)
     val memo: Memo? = if (memoText != null) Memo.text(memoText) else null
     private val transactionBuilders: Deque<Transaction.Builder> = ArrayDeque<Transaction.Builder>()
 
@@ -79,15 +87,15 @@ class Payment(sourceSecretSeed: String, memoText: String? = null, val executor: 
         while (transactionBuilders.isNotEmpty()) {
             val transaction = transactionBuilders.pollLast().build()
             transaction.sign(sourceKeys)
-            executor.makeTransaction(transaction)
+            network.makeTransaction(transaction)
             println("  Executed transaction #${i++}")
         }
     }
 }
 
-interface PaymentExecutor {
-    fun makeTransaction(transaction: Transaction)
+interface Network {
     fun accountOf(keyPair: KeyPair): AccountResponse
+    fun makeTransaction(transaction: Transaction)
 
     fun printBalance(keyPair: KeyPair) {
         val account: AccountResponse = accountOf(keyPair)
@@ -97,19 +105,19 @@ interface PaymentExecutor {
     }
 }
 
-class TestPaymentExecutor : PaymentExecutor {
+class TestNetwork : Network {
     init {
-        Network.useTestNetwork()
+        org.stellar.sdk.Network.useTestNetwork()
     }
 
     val server = Server("https://horizon-testnet.stellar.org")
+
+    override fun accountOf(keyPair: KeyPair): AccountResponse = server.accounts().account(keyPair)
 
     override fun makeTransaction(transaction: Transaction) {
         val submission: SubmitTransactionResponse = server.submitTransaction(transaction)
         assert(submission.isSuccess, { "Transaction failed." })
     }
-
-    override fun accountOf(keyPair: KeyPair): AccountResponse = server.accounts().account(keyPair)
 
     // Test utilities
     val sender: KeyPair = KeyPair.fromSecretSeed("SBFJRAEZHMA6GB2OPELLRQVER57V6DLDT6PYJZSJGI4HMZPP7MCJ3QID")
@@ -129,12 +137,14 @@ class TestPaymentExecutor : PaymentExecutor {
     // ==============
 }
 
-class ProductionPaymentExecutor : PaymentExecutor {
+class ProductionNetwork : Network {
     init {
-        Network.usePublicNetwork()
+        org.stellar.sdk.Network.usePublicNetwork()
     }
 
     val server = Server("https://horizon.stellar.org")
+
+    override fun accountOf(keyPair: KeyPair): AccountResponse = server.accounts().account(keyPair)
 
     override fun makeTransaction(transaction: Transaction) {
         val blob = URLEncoder.encode(transaction.toEnvelopeXdrBase64(), "UTF-8")
@@ -142,6 +152,4 @@ class ProductionPaymentExecutor : PaymentExecutor {
         val result = parseJson<TransactionResult>(stream)
         assert(result.status == "PENDING", { "Transaction failed." })
     }
-
-    override fun accountOf(keyPair: KeyPair): AccountResponse = server.accounts().account(keyPair)
 }

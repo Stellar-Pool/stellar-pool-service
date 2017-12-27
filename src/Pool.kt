@@ -14,6 +14,10 @@ import kotlin.math.roundToLong
 
 fun main(args: Array<String>) {
     val configuration = ConfigurationFile().open()
+    if (args.isNotEmpty() && args[0] == "--run-inflation") {
+        runInflation(configuration.bank, configuration.messages.inflation)
+        return
+    }
     when (configuration.tests.mode) {
         PRODUCTION -> {
             if (args.isEmpty()) {
@@ -32,12 +36,20 @@ fun main(args: Array<String>) {
             val prize = StellarCurrency.ofLumens(Math.random() * 10000)
             pool.distribute(prize)
         }
-        MAINNET_PAYMENT -> singleMainnetPayment()
+        MAINNET_PAYMENT -> {
+            if (args.size < 2) {
+                println("Arguments: <source> <destination>")
+                println("  <source> – Secret seed of the account that should make the payment.")
+                println("  <destination> – ID of the account to which the payment should be made.")
+                return
+            }
+            singleMainnetPayment(args[0], args[1])
+        }
     }
 }
 
 class Pool(val pool: Account, val configuration: Configuration) {
-    val connection: Connection
+    private val connection: Connection
 
     init {
         Class.forName("org.postgresql.Driver")
@@ -67,7 +79,7 @@ class Pool(val pool: Account, val configuration: Configuration) {
         }
         println("Distributing $prize")
 
-        val paymentHandler = PaymentHandler(!execute, configuration.bank, configuration.paymentInfo)
+        val paymentExecutor = PaymentExecutor(!execute, configuration.bank, configuration.messages.distribution)
         println(Header("Distribution"))
         var totalRewards = StellarCurrency.ZERO
         var totalActualRewards = StellarCurrency.ZERO
@@ -97,7 +109,7 @@ class Pool(val pool: Account, val configuration: Configuration) {
                 println("Pay $actualReward ($percentOfPrize of prize) to $account")
             }
 
-            paymentHandler.pay(account, actualReward)
+            paymentExecutor.pay(account, actualReward)
         }
 
         println(Header("Fees"))
@@ -111,8 +123,8 @@ class Pool(val pool: Account, val configuration: Configuration) {
 
         println(Header("Payment"))
         println("Paying fees to ${configuration.feeCollector}")
-        paymentHandler.pay(configuration.feeCollector, totalFees)
-        paymentHandler.executePayment()
+        paymentExecutor.pay(configuration.feeCollector, totalFees)
+        paymentExecutor.execute()
 
         println(Header("Summary"))
         println("Total amount of actual rewards given is $totalActualRewards")
@@ -174,15 +186,15 @@ class Pool(val pool: Account, val configuration: Configuration) {
         }
     }
 
-    class PaymentHandler(val noop: Boolean, senderSecretSeed: String, memo: String) {
-        val payment = if (noop) null else Payment(senderSecretSeed, memo, ProductionPaymentExecutor())
+    class PaymentExecutor(private val noop: Boolean, senderSecretSeed: String, memo: String) {
+        val payment = if (noop) null else Payment(ProductionNetwork(), senderSecretSeed, memo)
 
         fun pay(receiver: Account, amount: StellarCurrency) {
             if (noop) return
             payment!!.addDestination(receiver.address, amount.lumens.toString())
         }
 
-        fun executePayment() {
+        fun execute() {
             if (noop) {
                 println("It was a NO-OP")
                 return

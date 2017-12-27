@@ -8,7 +8,7 @@ import org.jetbrains.annotations.NotNull;
 public final class Configuration {
     private String pool;
     private String bank;
-    private String paymentInfo;
+    private Messages messages;
     private FeeDescriptor[] feeSchedule;
     private String feeCollector;
     private Tests tests;
@@ -27,10 +27,9 @@ public final class Configuration {
     }
 
     @NotNull
-    public String getPaymentInfo() {
-        assert paymentInfo != null && !paymentInfo.isEmpty() && paymentInfo.getBytes().length <= 28 :
-                "paymentInfo field in configuration must not be null, nor empty, nor greater than 28 bytes in size";
-        return paymentInfo;
+    public Messages getMessages() {
+        assert messages != null : "messages field in configuration must not be null";
+        return messages;
     }
 
     @NotNull
@@ -56,6 +55,25 @@ public final class Configuration {
     public SafetyThresholds getSafetyThresholds() {
         assert safetyThresholds != null : "safetyThresholds field in configuration must not be null";
         return safetyThresholds;
+    }
+
+    public static final class Messages {
+        private String distribution;
+        private String inflation;
+
+        @NotNull
+        public String getDistribution() {
+            assert distribution != null && !distribution.isEmpty() && distribution.getBytes().length <= 28 :
+                    "messages.distribution field in configuration must not be null, nor empty, nor greater than 28 bytes in size";
+            return distribution;
+        }
+
+        @NotNull
+        public String getInflation() {
+            assert inflation != null && !inflation.isEmpty() && inflation.getBytes().length <= 28 :
+                    "messages.inflation field in configuration must not be null, nor empty, nor greater than 28 bytes in size";
+            return inflation;
+        }
     }
 
     public static final class FeeDescriptor {
