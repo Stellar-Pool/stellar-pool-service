@@ -47,26 +47,27 @@ class Pool(val pool: Account, val configuration: Configuration) {
     }
 
     fun distribute(prize: StellarCurrency, execute: Boolean = false) {
+        val formatter = NumberFormat.getNumberInstance()
         println(Header("Network info"))
-        val accountsCount = countAccounts()
+        val accountsCount = formatter.format(countAccounts())
         println("Total number of accounts is $accountsCount")
         val circulatingSupply = circulatingSupply()
         println("These accounts own $circulatingSupply")
         val totalVotes = totalVotes()
         println("Total number of votes is $totalVotes")
-        val votersCount = countVoters()
+        val votersCount = formatter.format(countVoters())
         println("These votes come from $votersCount accounts")
-        val minVotes = circulatingSupply / StellarCurrency(2000) // Or multiply by 0.0005
-        println("Minimum number of votes is $minVotes")
 
         println(Header("Overview"))
+        val minVotes = circulatingSupply / StellarCurrency(2000) // Or multiply by 0.0005
+        println("Minimum number of votes is $minVotes")
         if (totalVotes <= minVotes) {
             println("Threshold has not been reached.")
             return
         }
         println("Distributing $prize")
-        println("Paying fees to ${configuration.feeCollector.address}")
 
+        val paymentHandler = PaymentHandler(!execute, configuration.bank, configuration.paymentInfo)
         println(Header("Distribution"))
         var totalRewards = StellarCurrency.ZERO
         var totalActualRewards = StellarCurrency.ZERO
@@ -79,7 +80,7 @@ class Pool(val pool: Account, val configuration: Configuration) {
             val rewardsComparison: ComparisonResult = totalRewards.compare(prize)
             if (rewardsComparison.relation == GREATER &&
                     rewardsComparison.delta >= configuration.safetyThresholds.rewardsExceedPrize) {
-                println("Attention! Rewards exceeded the prize by ${rewardsComparison.delta}")
+                println("Attention! Sum of all rewards plus fees exceeded the prize by ${rewardsComparison.delta}")
                 return
             }
 
@@ -96,13 +97,10 @@ class Pool(val pool: Account, val configuration: Configuration) {
                 println("Pay $actualReward ($percentOfPrize of prize) to $account")
             }
 
-            if (execute) {
-                account.pay(actualReward)
-            }
+            paymentHandler.pay(account, actualReward)
         }
 
-        println(Header("Summary"))
-        println("Total amount of actual rewards given is $totalActualRewards")
+        println(Header("Fees"))
         val totalFees = totalRewards - totalActualRewards
         println("Total amount of fees taken is $totalFees")
         var recalculatedTotalFees = StellarCurrency.ZERO
@@ -110,14 +108,17 @@ class Pool(val pool: Account, val configuration: Configuration) {
             println("  $key fee was paid by ${value.counter} accounts, who generated ${value.total}")
             recalculatedTotalFees += value.total
         }
-        if (!execute) {
-            println("It was a NO-OP")
-        }
 
-        println(Header("Safety checks"))
+        println(Header("Payment"))
+        println("Paying fees to ${configuration.feeCollector}")
+        paymentHandler.pay(configuration.feeCollector, totalFees)
+        paymentHandler.executePayment()
+
+        println(Header("Summary"))
+        println("Total amount of actual rewards given is $totalActualRewards")
         val rewardsComparison: ComparisonResult = totalRewards.compare(prize)
         val rewardsPrefix = if (rewardsComparison.delta >= StellarCurrency(100)) "Attention! " else ""
-        println("${rewardsPrefix}Total amount of rewards is ${rewardsComparison.relation.description} the prize by ${rewardsComparison.delta}")
+        println("${rewardsPrefix}Sum of all rewards plus fees is ${rewardsComparison.relation.description} the prize by ${rewardsComparison.delta}")
         val feesComparison: ComparisonResult = totalFees.compare(recalculatedTotalFees)
         val feesPrefix = if (feesComparison.relation == EQUAL) "" else "Attention! "
         println("${feesPrefix}Recalculated total amount of fees is ${feesComparison.relation.description} itself by ${feesComparison.delta}")
@@ -173,6 +174,24 @@ class Pool(val pool: Account, val configuration: Configuration) {
         }
     }
 
+    class PaymentHandler(val noop: Boolean, senderSecretSeed: String, memo: String) {
+        val payment = if (noop) null else Payment(senderSecretSeed, memo, ProductionPaymentExecutor())
+
+        fun pay(receiver: Account, amount: StellarCurrency) {
+            if (noop) return
+            payment!!.addDestination(receiver.address, amount.lumens.toString())
+        }
+
+        fun executePayment() {
+            if (noop) {
+                println("It was a NO-OP")
+                return
+            }
+            println("Payments are EXECUTED")
+            payment!!.send()
+        }
+    }
+
     // Database queries
     private fun countAccounts(): Long {
         val statement = connection.createStatement()
@@ -220,13 +239,8 @@ class Account(val address: String, val balance: StellarCurrency? = null) {
         assert(address == address.toUpperCase(), { "address must contain uppercase letters only" })
     }
 
-    fun pay(amount: StellarCurrency) {
-
-    }
-
     override fun toString(): String {
-        assert(balance != null, { "Cannot call toString() when balance is null." })
-        return "$address {has $balance}"
+        return if (balance == null) address else "$address {has $balance}"
     }
 }
 

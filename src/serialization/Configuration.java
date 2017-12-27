@@ -8,6 +8,7 @@ import org.jetbrains.annotations.NotNull;
 public final class Configuration {
     private String pool;
     private String bank;
+    private String paymentInfo;
     private FeeDescriptor[] feeSchedule;
     private String feeCollector;
     private Tests tests;
@@ -23,6 +24,13 @@ public final class Configuration {
     public String getBank() {
         assert bank != null && !bank.isEmpty() : "bank field in configuration must not be null nor empty";
         return bank;
+    }
+
+    @NotNull
+    public String getPaymentInfo() {
+        assert paymentInfo != null && !paymentInfo.isEmpty() && paymentInfo.getBytes().length <= 28 :
+                "paymentInfo field in configuration must not be null, nor empty, nor greater than 28 bytes in size";
+        return paymentInfo;
     }
 
     @NotNull

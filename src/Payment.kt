@@ -1,6 +1,5 @@
 package it.menzani.stellarpool
 
-import com.google.gson.Gson
 import it.menzani.stellarpool.serialization.TransactionResult
 import it.menzani.stellarpool.serialization.parseJson
 import org.stellar.sdk.*
@@ -52,10 +51,11 @@ fun singleMainnetPayment() {
     paymentExecutor.printBalance(destination)
 }
 
-class Payment(sourceSecretSeed: String, val executor: PaymentExecutor) {
+class Payment(sourceSecretSeed: String, memoText: String? = null, val executor: PaymentExecutor) {
     val sourceKeys: KeyPair = KeyPair.fromSecretSeed(sourceSecretSeed)
     val sourceAccount: AccountResponse = executor.accountOf(sourceKeys)
-    val transactionBuilders: Deque<Transaction.Builder> = ArrayDeque<Transaction.Builder>()
+    val memo: Memo? = if (memoText != null) Memo.text(memoText) else null
+    private val transactionBuilders: Deque<Transaction.Builder> = ArrayDeque<Transaction.Builder>()
 
     fun addDestination(destinationAccountId: String, amount: String) {
         val destinationKeys = KeyPair.fromAccountId(destinationAccountId)
@@ -67,8 +67,7 @@ class Payment(sourceSecretSeed: String, val executor: PaymentExecutor) {
         var transactionBuilder = transactionBuilders.peekFirst()
         if (transactionBuilder == null || transactionBuilder.operationsCount == 100) {
             transactionBuilder = Transaction.Builder(sourceAccount)
-            val memoText = "stellarpool.net distribution"
-            transactionBuilder.addMemo(Memo.text(memoText))
+            if (memo != null) transactionBuilder.addMemo(memo)
             transactionBuilders.addFirst(transactionBuilder)
         }
         transactionBuilder.addOperation(payment)
@@ -135,7 +134,6 @@ class ProductionPaymentExecutor : PaymentExecutor {
         Network.usePublicNetwork()
     }
 
-    val gson = Gson()
     val server = Server("https://horizon.stellar.org")
 
     override fun makeTransaction(transaction: Transaction) {

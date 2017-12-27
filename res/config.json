@@ -2,6 +2,7 @@
   "Comments": {
     "pool": "ID of the account that acts as the inflation pool when tests.mode is set to PRODUCTION.",
     "bank": "Secret seed of the account that should make payments.",
+    "paymentInfo": "Text to attach as memo to the transactions submitted by bank.",
     "feeSchedule": [
       {
         "This array's field": "Calculates the fee to apply on each payment."
@@ -21,13 +22,14 @@
     },
     "safetyThresholds": {
       "This object's field": "These thresholds help protect the user from making unnecessary payments.",
-      "rewardsExceedPrize": "By how much, in Lumens, the sum of all rewards plus the fee is allowed to exceed the prize during distribution.",
+      "rewardsExceedPrize": "By how much, in Lumens, the sum of all rewards plus fees is allowed to exceed the prize during distribution.",
       "rewardExceedsAmount": "The cap, in Lumens, at which a single reward being paid should be logged.",
       "rewardExceedsPercentOfPrize": "The cap, in percentage over the prize, at which a single reward being paid should be logged."
     }
   },
   "pool": "",
   "bank": "",
+  "paymentInfo": "",
   "feeSchedule": [
     {
       "threshold": 0.0,
