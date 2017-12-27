@@ -1,5 +1,6 @@
 package it.menzani.stellarpool
 
+import it.menzani.stellarpool.Pool.Relation.*
 import it.menzani.stellarpool.serialization.Configuration
 import it.menzani.stellarpool.serialization.Configuration.Tests.Mode.*
 import it.menzani.stellarpool.serialization.ConfigurationFile
@@ -7,11 +8,9 @@ import java.sql.Connection
 import java.sql.DriverManager
 import java.text.DecimalFormat
 import java.text.NumberFormat
+import java.util.*
 import kotlin.math.absoluteValue
 import kotlin.math.roundToLong
-
-val integralFormatter: NumberFormat = NumberFormat.getNumberInstance()
-val decimalFormatter: NumberFormat = DecimalFormat.getNumberInstance()
 
 fun main(args: Array<String>) {
     val configuration = ConfigurationFile().open()
@@ -20,11 +19,13 @@ fun main(args: Array<String>) {
             if (args.isEmpty()) {
                 println("Arguments: <prize>")
                 println("  <prize> — Amount of Lumens to distribute.")
+                println("  ['--execute'] — If unset, gets an overview of what would be done, without actually executing payments.")
                 return
             }
             val pool = Pool(configuration.pool, configuration)
             val prize = StellarCurrency.ofLumens(args[0].toDouble())
-            pool.distribute(prize)
+            val execute = args.size != 1 && args[1] == "--execute"
+            pool.distribute(prize, execute)
         }
         TEST_POOL -> {
             val pool = Pool(configuration.tests.testPool, configuration)
@@ -45,8 +46,8 @@ class Pool(val pool: Account, val configuration: Configuration) {
         connection.autoCommit = false
     }
 
-    fun distribute(prize: StellarCurrency) {
-        println("============================[ Network info ]============================")
+    fun distribute(prize: StellarCurrency, execute: Boolean = false) {
+        println(Header("Network info"))
         val accountsCount = countAccounts()
         println("Total number of accounts is $accountsCount")
         val circulatingSupply = circulatingSupply()
@@ -55,59 +56,124 @@ class Pool(val pool: Account, val configuration: Configuration) {
         println("Total number of votes is $totalVotes")
         val votersCount = countVoters()
         println("These votes come from $votersCount accounts")
-
         val minVotes = circulatingSupply / StellarCurrency(2000) // Or multiply by 0.0005
         println("Minimum number of votes is $minVotes")
-        println("============================[ Overview ]============================")
+
+        println(Header("Overview"))
         if (totalVotes <= minVotes) {
             println("Threshold has not been reached.")
             return
         }
         println("Distributing $prize")
         println("Paying fees to ${configuration.feeCollector.address}")
-        println("============================[ Distribution ]============================")
 
+        println(Header("Distribution"))
         var totalRewards = StellarCurrency.ZERO
+        var totalActualRewards = StellarCurrency.ZERO
+        val fees = TreeMap<Percent, FeeTracker>()
         for (account in getVoters()) {
             val rewardFactor = account.balance!!.stroops / totalVotes.stroops.toDouble()
             val reward = StellarCurrency((rewardFactor * prize.stroops).roundToLong())
 
             totalRewards += reward
-            if (totalRewards > prize &&
-                    totalRewards - prize >= configuration.safetyThresholds.rewardsExceedPrize) {
-                println("Attention! Rewards exceeded the prize by at least ${configuration.safetyThresholds.rewardsExceedPrize}")
+            val rewardsComparison: ComparisonResult = totalRewards.compare(prize)
+            if (rewardsComparison.relation == GREATER &&
+                    rewardsComparison.delta >= configuration.safetyThresholds.rewardsExceedPrize) {
+                println("Attention! Rewards exceeded the prize by ${rewardsComparison.delta}")
                 return
             }
 
+            val fee: Percent = calculateFee(account.balance)
+            val feeAmount = StellarCurrency(fee.apply(reward.stroops).roundToLong())
+            fees.computeIfAbsent(fee) { FeeTracker() }
+                    .add(feeAmount)
+            val actualReward = reward - feeAmount
+            totalActualRewards += actualReward
+
             val percentOfPrize = Percent(rewardFactor * 100)
-            if (reward >= configuration.safetyThresholds.rewardExceedsAmount ||
+            if (actualReward >= configuration.safetyThresholds.rewardExceedsAmount ||
                     percentOfPrize >= configuration.safetyThresholds.rewardExceedsPercentOfPrize) {
-                println("Pay $reward ($percentOfPrize of prize) to $account")
+                println("Pay $actualReward ($percentOfPrize of prize) to $account")
             }
 
-            if (configuration.shouldNotExecutePayments()) {
-                continue
+            if (execute) {
+                account.pay(actualReward)
             }
-            account.pay(reward)
         }
 
-        println("============================[ Summary ]============================")
-        println("Sum of actual rewards given is $totalRewards")
-        val result = totalRewards.compareTo(prize)
-        val resultDescription = when {
-            result < 0 -> "lesser than"
-            result == 0 -> "equal to"
-            result > 0 -> "greater than"
-            else -> throw AssertionError()
+        println(Header("Summary"))
+        println("Total amount of actual rewards given is $totalActualRewards")
+        val totalFees = totalRewards - totalActualRewards
+        println("Total amount of fees taken is $totalFees")
+        var recalculatedTotalFees = StellarCurrency.ZERO
+        for ((key, value) in fees) {
+            println("  $key fee was paid by ${value.counter} accounts, who generated ${value.total}")
+            recalculatedTotalFees += value.total
         }
-        val delta = totalRewards.stroops - prize.stroops
-        println("It is $resultDescription the prize by ${StellarCurrency(delta.absoluteValue)}")
-
-        if (configuration.shouldNotExecutePayments()) {
+        if (!execute) {
             println("It was a NO-OP")
+        }
+
+        println(Header("Safety checks"))
+        val rewardsComparison: ComparisonResult = totalRewards.compare(prize)
+        val rewardsPrefix = if (rewardsComparison.delta >= StellarCurrency(100)) "Attention! " else ""
+        println("${rewardsPrefix}Total amount of rewards is ${rewardsComparison.relation.description} the prize by ${rewardsComparison.delta}")
+        val feesComparison: ComparisonResult = totalFees.compare(recalculatedTotalFees)
+        val feesPrefix = if (feesComparison.relation == EQUAL) "" else "Attention! "
+        println("${feesPrefix}Recalculated total amount of fees is ${feesComparison.relation.description} itself by ${feesComparison.delta}")
+    }
+
+    class Header(val title: String, val length: Int = 72) {
+        override fun toString(): String {
+            val barLength = (length - title.length) / 2
+            val bar = Collections.nCopies(barLength, '=').joinToString("")
+            return "$bar[ $title ]$bar"
         }
     }
 
+    private fun StellarCurrency.compare(other: StellarCurrency): ComparisonResult {
+        val result = this.compareTo(other)
+        val relation = when {
+            result < 0 -> LESSER
+            result == 0 -> EQUAL
+            result > 0 -> GREATER
+            else -> throw AssertionError()
+        }
+        val delta = this.stroops - other.stroops
+        return ComparisonResult(relation, StellarCurrency(delta.absoluteValue))
+    }
+
+    class ComparisonResult(val relation: Relation, val delta: StellarCurrency)
+
+    enum class Relation(val description: String) {
+        LESSER("lesser than"),
+        EQUAL("equal to"),
+        GREATER("greater than");
+    }
+
+    private fun calculateFee(votes: StellarCurrency): Percent {
+        var fee: Percent? = null
+        for (descriptor in configuration.feeSchedule) {
+            if (votes < descriptor.threshold) {
+                continue
+            }
+            fee = descriptor.fee
+        }
+        assert(fee != null, { "No suitable descriptor found." })
+        return fee!!
+    }
+
+    class FeeTracker {
+        var total = StellarCurrency.ZERO
+        var counter = 0
+
+        fun add(amount: StellarCurrency) {
+            total += amount
+            counter++
+        }
+    }
+
+    // Database queries
     private fun countAccounts(): Long {
         val statement = connection.createStatement()
         val results = statement.executeQuery("SELECT COUNT(*) FROM accounts")
@@ -145,6 +211,7 @@ class Pool(val pool: Account, val configuration: Configuration) {
             override fun next() = Account(results.getString(1), StellarCurrency(results.getLong(2)))
         }
     }
+    // ================
 }
 
 class Account(val address: String, val balance: StellarCurrency? = null) {
@@ -157,32 +224,36 @@ class Account(val address: String, val balance: StellarCurrency? = null) {
 
     }
 
-    override fun toString() = "$address {has $balance}"
+    override fun toString(): String {
+        assert(balance != null, { "Cannot call toString() when balance is null." })
+        return "$address {has $balance}"
+    }
 }
 
 class StellarCurrency(val stroops: Long) : Comparable<StellarCurrency> {
-    val lumensPrecise = stroops / 10_000_000.0
-    val lumens = lumensPrecise.roundToLong()
+    companion object {
+        val FORMATTER: NumberFormat = DecimalFormat.getNumberInstance()
+        val ZERO = StellarCurrency(0)
+
+        init {
+            FORMATTER.maximumFractionDigits = 0
+        }
+
+        fun ofLumens(lumens: Double) = StellarCurrency((lumens * 10_000_000).roundToLong())
+    }
+
+    val lumens = stroops / 10_000_000.0
 
     init {
         assert(stroops >= 0, { "stroops must be greater than or equal to 0" })
     }
 
-    companion object {
-        fun ofLumens(lumens: Double) = StellarCurrency((lumens * 10_000_000).roundToLong())
-
-        val ZERO = StellarCurrency(0)
-    }
-
     override fun compareTo(other: StellarCurrency) = stroops.compareTo(other.stroops)
 
     override fun toString(): String {
-        val lumensText = if (lumensPrecise < 1) {
-            decimalFormatter.format(lumensPrecise)
-        } else {
-            integralFormatter.format(lumens)
-        }
-        return "$lumensText XLM (${integralFormatter.format(stroops)} stroops)"
+        val lumens: String = FORMATTER.format(lumens)
+        val stroops: String = FORMATTER.format(stroops)
+        return "$lumens XLM ($stroops stroops)"
     }
 
     operator fun plus(other: StellarCurrency) = StellarCurrency(stroops + other.stroops)
@@ -191,14 +262,29 @@ class StellarCurrency(val stroops: Long) : Comparable<StellarCurrency> {
 }
 
 class Percent(val value: Double) : Comparable<Percent> {
-    val integralValue: Short
+    companion object {
+        val FORMATTER: NumberFormat = DecimalFormat.getNumberInstance()
+    }
 
     init {
         assert(value in 0..100, { "value must be between 0 and 100 inclusive" })
-        integralValue = value.toShort()
+    }
+
+    fun apply(value: Long) = (value / 100.0) * this.value
+
+    override fun toString(): String {
+        val value: String = FORMATTER.format(value)
+        return "$value%"
     }
 
     override fun compareTo(other: Percent) = value.compareTo(other.value)
 
-    override fun toString() = "${decimalFormatter.format(value)}%"
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+        other as Percent
+        return value == other.value
+    }
+
+    override fun hashCode() = value.hashCode()
 }

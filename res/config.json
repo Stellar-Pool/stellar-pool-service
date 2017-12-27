@@ -2,28 +2,39 @@
   "Comments": {
     "pool": "ID of the account that acts as the inflation pool when tests.mode is set to PRODUCTION.",
     "bank": "Secret seed of the account that should make payments.",
-    "fee": "Percentage of fees to apply on each payment.",
+    "feeSchedule": [
+      {
+        "This array's field": "Calculates the fee to apply on each payment."
+      },
+      {
+        "threshold": "The account balance (i.e. the number of votes), in Lumens, at which the corresponding fee applies.",
+        "fee": "Percentage of reward to take as fee."
+      }
+    ],
     "feeCollector": "ID of the account to which fees are paid.",
-    "noop": "Gets an overview of what would be done, without actually executing payments.",
     "tests": {
       "This object's field": "Configure and run tests.",
-      "mode1": "PRODUCTION: Uses the pool field. Requires the prize to be specified by the user.",
-      "mode2": "TEST_POOL: Uses the tests.testPool field, and a randomly-generated prize.",
-      "mode3": "MAINNET_PAYMENT: Only runs it.menzani.stellarpool.PaymentKt.singleMainnetPayment().",
+      "mode_1": "PRODUCTION: Uses the pool field. Requires the prize to be specified by the user.",
+      "mode_2": "TEST_POOL: Uses the tests.testPool field, and a randomly-generated prize.",
+      "mode_3": "MAINNET_PAYMENT: Only runs it.menzani.stellarpool.PaymentKt.singleMainnetPayment().",
       "testPool": "ID of the account that acts as the inflation pool when tests.mode is set to TEST_POOL."
     },
     "safetyThresholds": {
       "This object's field": "These thresholds help protect the user from making unnecessary payments.",
-      "rewardsExceedPrize": "By how much, in Lumens, the sum of all rewards is allowed to exceed the prize during distribution.",
+      "rewardsExceedPrize": "By how much, in Lumens, the sum of all rewards plus the fee is allowed to exceed the prize during distribution.",
       "rewardExceedsAmount": "The cap, in Lumens, at which a single reward being paid should be logged.",
       "rewardExceedsPercentOfPrize": "The cap, in percentage over the prize, at which a single reward being paid should be logged."
     }
   },
   "pool": "",
   "bank": "",
-  "fee": 0.0,
+  "feeSchedule": [
+    {
+      "threshold": 0.0,
+      "fee": 0.0
+    }
+  ],
   "feeCollector": "",
-  "noop": false,
   "tests": {
     "mode": "PRODUCTION",
     "testPool": ""

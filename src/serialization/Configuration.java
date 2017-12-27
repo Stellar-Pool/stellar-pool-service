@@ -8,9 +8,8 @@ import org.jetbrains.annotations.NotNull;
 public final class Configuration {
     private String pool;
     private String bank;
-    private double fee;
+    private FeeDescriptor[] feeSchedule;
     private String feeCollector;
-    private boolean noop;
     private Tests tests;
     private SafetyThresholds safetyThresholds;
 
@@ -27,18 +26,16 @@ public final class Configuration {
     }
 
     @NotNull
-    public Percent getFee() {
-        return new Percent(fee);
+    public FeeDescriptor[] getFeeSchedule() {
+        assert feeSchedule != null && feeSchedule.length != 0 :
+                "feeSchedule field in configuration must not be null and it must contain at least one element";
+        return feeSchedule;
     }
 
     @NotNull
     public Account getFeeCollector() {
         assert feeCollector != null && !feeCollector.isEmpty() : "feeCollector field in configuration must not be null nor empty";
         return new Account(feeCollector, null);
-    }
-
-    public boolean shouldNotExecutePayments() {
-        return noop || getTests().getMode() == Tests.Mode.TEST_POOL;
     }
 
     @NotNull
@@ -51,6 +48,21 @@ public final class Configuration {
     public SafetyThresholds getSafetyThresholds() {
         assert safetyThresholds != null : "safetyThresholds field in configuration must not be null";
         return safetyThresholds;
+    }
+
+    public static final class FeeDescriptor {
+        private double threshold;
+        private double fee;
+
+        @NotNull
+        public StellarCurrency getThreshold() {
+            return StellarCurrency.Companion.ofLumens(threshold);
+        }
+
+        @NotNull
+        public Percent getFee() {
+            return new Percent(fee);
+        }
     }
 
     public static final class Tests {
