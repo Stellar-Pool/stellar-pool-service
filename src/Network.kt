@@ -39,7 +39,13 @@ fun runInflation(sourceSecretSeed: String, memoText: String) {
             .addMemo(Memo.text(memoText))
             .build()
     transaction.sign(executorKeys)
-    productionNetwork.makeTransaction(transaction)
+    try {
+        productionNetwork.makeTransaction(transaction)
+        println("Inflation has run.")
+    } catch (e: TransactionFailedException) {
+        println("Could not make transaction.")
+        println(e.result)
+    }
 }
 
 fun singleMainnetPayment(sourceSecretSeed: String, destinationAccountId: String) {
@@ -83,12 +89,17 @@ class Payment(val network: Network, sourceSecretSeed: String, memoText: String? 
 
     fun send() {
         println("Payment has ${transactionBuilders.size} transactions")
-        var i = 1
+        var i = 0
         while (transactionBuilders.isNotEmpty()) {
             val transaction = transactionBuilders.pollLast().build()
             transaction.sign(sourceKeys)
-            network.makeTransaction(transaction)
-            println("  Executed transaction #${i++}")
+            i++
+            try {
+                network.makeTransaction(transaction)
+                println("  Executed transaction #$i")
+            } catch (e: TransactionFailedException) {
+                println("  Transaction failed #$i")
+            }
         }
     }
 }
@@ -105,6 +116,8 @@ interface Network {
     }
 }
 
+class TransactionFailedException(val result: Any) : Exception()
+
 class TestNetwork : Network {
     init {
         org.stellar.sdk.Network.useTestNetwork()
@@ -116,7 +129,7 @@ class TestNetwork : Network {
 
     override fun makeTransaction(transaction: Transaction) {
         val submission: SubmitTransactionResponse = server.submitTransaction(transaction)
-        assert(submission.isSuccess, { "Transaction failed." })
+        if (!submission.isSuccess) throw TransactionFailedException(submission)
     }
 
     // Test utilities
@@ -124,8 +137,8 @@ class TestNetwork : Network {
     val receiver: KeyPair = KeyPair.fromSecretSeed("SC4TQUMPJKW5S2UPGLPGSHJDTEEGATW2CS4AHXLJM4USUT2UXVUKVZGJ")
 
     init {
-        assert(sender.accountId == "GDQSOMO3Z2VPQOCKJI2S5BRSVLHO5F5RN6SXKNFLAMGGXINFNTO4YI36")
-        assert(receiver.accountId == "GCVQMOB6ASUZUJQ3EGQI7WOOIQ6HI6MVPMQCUO5NJYMXIFW3UUF4LM3C")
+        assert(sender.accountId == "GDQSOMO3Z2VPQOCKJI2S5BRSVLHO5F5RN6SXKNFLAMGGXINFNTO4YI36", { "sender account keys check failed." })
+        assert(receiver.accountId == "GCVQMOB6ASUZUJQ3EGQI7WOOIQ6HI6MVPMQCUO5NJYMXIFW3UUF4LM3C", { "receiver account keys check failed." })
     }
 
     fun printBalances() {
@@ -149,7 +162,7 @@ class ProductionNetwork : Network {
     override fun makeTransaction(transaction: Transaction) {
         val blob = URLEncoder.encode(transaction.toEnvelopeXdrBase64(), "UTF-8")
         val stream = URL("http://localhost:11626/tx?blob=$blob").openStream()
-        val result = parseJson<TransactionResult>(stream)
-        assert(result.status == "PENDING", { "Transaction failed." })
+        val result: TransactionResult = parseJson(stream)
+        if (result.status != "PENDING") throw TransactionFailedException(result)
     }
 }

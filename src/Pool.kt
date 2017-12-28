@@ -4,6 +4,7 @@ import it.menzani.stellarpool.Pool.Relation.*
 import it.menzani.stellarpool.serialization.Configuration
 import it.menzani.stellarpool.serialization.Configuration.Tests.Mode.*
 import it.menzani.stellarpool.serialization.ConfigurationFile
+import it.menzani.stellarpool.serialization.MalformedConfigurationException
 import java.sql.Connection
 import java.sql.DriverManager
 import java.text.DecimalFormat
@@ -172,8 +173,8 @@ class Pool(val pool: Account, val configuration: Configuration) {
             }
             fee = descriptor.fee
         }
-        assert(fee != null, { "No suitable descriptor found." })
-        return fee!!
+        if (fee == null) throw MalformedConfigurationException("feeSchedule", "- No suitable descriptor found for $votes.")
+        return fee
     }
 
     class FeeTracker {
@@ -208,28 +209,28 @@ class Pool(val pool: Account, val configuration: Configuration) {
     private fun countAccounts(): Long {
         val statement = connection.createStatement()
         val results = statement.executeQuery("SELECT COUNT(*) FROM accounts")
-        assert(results.next(), { "Query returned 0 results." })
+        assert(results.next(), { "Query returned no results." })
         return results.getLong(1)
     }
 
     private fun countVoters(): Long {
         val statement = connection.createStatement()
         val results = statement.executeQuery("SELECT COUNT(*) FROM accounts WHERE inflationdest='${pool.address}'")
-        assert(results.next(), { "Query returned 0 results." })
+        assert(results.next(), { "Query returned no results." })
         return results.getLong(1)
     }
 
     private fun circulatingSupply(): StellarCurrency {
         val statement = connection.createStatement()
         val results = statement.executeQuery("SELECT SUM(balance) FROM accounts")
-        assert(results.next(), { "Query returned 0 results." })
+        assert(results.next(), { "Query returned no results." })
         return StellarCurrency(results.getLong(1))
     }
 
     private fun totalVotes(): StellarCurrency {
         val statement = connection.createStatement()
         val results = statement.executeQuery("SELECT SUM(balance) FROM accounts WHERE inflationdest='${pool.address}'")
-        assert(results.next(), { "Query returned 0 results." })
+        assert(results.next(), { "Query returned no results." })
         return StellarCurrency(results.getLong(1))
     }
 
@@ -247,8 +248,8 @@ class Pool(val pool: Account, val configuration: Configuration) {
 
 class Account(val address: String, val balance: StellarCurrency? = null) {
     init {
-        assert(address.length == 56, { "address must be 56 characters long" })
-        assert(address == address.toUpperCase(), { "address must contain uppercase letters only" })
+        if (address.length != 56) throw IllegalArgumentException("address must be 56 characters long")
+        if (address != address.toUpperCase()) throw IllegalArgumentException("address must contain uppercase letters only")
     }
 
     override fun toString(): String {
@@ -271,7 +272,7 @@ class StellarCurrency(val stroops: Long) : Comparable<StellarCurrency> {
     val lumens = stroops / 10_000_000.0
 
     init {
-        assert(stroops >= 0, { "stroops must be greater than or equal to 0" })
+        if (stroops < 0) throw IllegalArgumentException("stroops must be greater than or equal to 0")
     }
 
     override fun compareTo(other: StellarCurrency) = stroops.compareTo(other.stroops)
@@ -293,7 +294,7 @@ class Percent(val value: Double) : Comparable<Percent> {
     }
 
     init {
-        assert(value in 0..100, { "value must be between 0 and 100 inclusive" })
+        if (value !in 0..100) throw IllegalArgumentException("value must be between 0 and 100 inclusive")
     }
 
     fun apply(value: Long) = (value / 100.0) * this.value

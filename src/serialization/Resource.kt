@@ -30,5 +30,8 @@ class ConfigurationFile {
         }
     }
 
-    fun open() = parseJson<Configuration>(Files.newBufferedReader(file))
+    fun open(): Configuration = parseJson(Files.newBufferedReader(file))
 }
+
+class MalformedConfigurationException(fieldName: String, requirement: String) :
+        RuntimeException("$fieldName field in ${Resources.DEFAULT_CONFIG.resourceName} $requirement")

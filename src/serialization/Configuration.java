@@ -16,44 +16,48 @@ public final class Configuration {
 
     @NotNull
     public Account getPool() {
-        assert pool != null && !pool.isEmpty() : "pool field in configuration must not be null nor empty";
+        if (pool == null || pool.isEmpty())
+            throw new MalformedConfigurationException("pool", "must not be null nor empty");
         return new Account(pool, null);
     }
 
     @NotNull
     public String getBank() {
-        assert bank != null && !bank.isEmpty() : "bank field in configuration must not be null nor empty";
+        if (bank == null || bank.isEmpty())
+            throw new MalformedConfigurationException("bank", "must not be null nor empty");
         return bank;
     }
 
     @NotNull
     public Messages getMessages() {
-        assert messages != null : "messages field in configuration must not be null";
+        if (messages == null) throw new MalformedConfigurationException("messages", "must not be null");
         return messages;
     }
 
     @NotNull
     public FeeDescriptor[] getFeeSchedule() {
-        assert feeSchedule != null && feeSchedule.length != 0 :
-                "feeSchedule field in configuration must not be null and it must contain at least one element";
+        if (feeSchedule == null || feeSchedule.length == 0)
+            throw new MalformedConfigurationException("feeSchedule", "must not be null and it must contain at least one element");
         return feeSchedule;
     }
 
     @NotNull
     public Account getFeeCollector() {
-        assert feeCollector != null && !feeCollector.isEmpty() : "feeCollector field in configuration must not be null nor empty";
+        if (feeCollector == null || feeCollector.isEmpty())
+            throw new MalformedConfigurationException("feeCollector", "must not be null nor empty");
         return new Account(feeCollector, null);
     }
 
     @NotNull
     public Tests getTests() {
-        assert tests != null : "tests field in configuration must not be null";
+        if (tests == null) throw new MalformedConfigurationException("tests", "must not be null");
         return tests;
     }
 
     @NotNull
     public SafetyThresholds getSafetyThresholds() {
-        assert safetyThresholds != null : "safetyThresholds field in configuration must not be null";
+        if (safetyThresholds == null)
+            throw new MalformedConfigurationException("safetyThresholds", "must not be null");
         return safetyThresholds;
     }
 
@@ -63,15 +67,15 @@ public final class Configuration {
 
         @NotNull
         public String getDistribution() {
-            assert distribution != null && !distribution.isEmpty() && distribution.getBytes().length <= 28 :
-                    "messages.distribution field in configuration must not be null, nor empty, nor greater than 28 bytes in size";
+            if (distribution == null || distribution.isEmpty() || distribution.getBytes().length > 28)
+                throw new MalformedConfigurationException("messages.distribution", "must not be null, nor empty, nor greater than 28 bytes in size");
             return distribution;
         }
 
         @NotNull
         public String getInflation() {
-            assert inflation != null && !inflation.isEmpty() && inflation.getBytes().length <= 28 :
-                    "messages.inflation field in configuration must not be null, nor empty, nor greater than 28 bytes in size";
+            if (inflation == null || inflation.isEmpty() || inflation.getBytes().length > 28)
+                throw new MalformedConfigurationException("messages.inflation", "must not be null, nor empty, nor greater than 28 bytes in size");
             return inflation;
         }
     }
@@ -97,13 +101,14 @@ public final class Configuration {
 
         @NotNull
         public Mode getMode() {
-            assert mode != null : "tests.mode field in configuration must not be null";
+            if (mode == null) throw new MalformedConfigurationException("tests.mode", "must not be null");
             return mode;
         }
 
         @NotNull
         public Account getTestPool() {
-            assert testPool != null && !testPool.isEmpty() : "tests.testPool field in configuration must not be null nor empty";
+            if (testPool == null || testPool.isEmpty())
+                throw new MalformedConfigurationException("tests.testPool", "must not be null nor empty");
             return new Account(testPool, null);
         }
 
