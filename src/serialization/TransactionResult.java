@@ -1,10 +1,6 @@
 package it.menzani.stellarpool.serialization;
 
-import com.google.gson.Gson;
-
 public final class TransactionResult {
-    private static final Gson gson = new Gson();
-
     private String status;
     private String error;
     private String exception;
@@ -23,6 +19,6 @@ public final class TransactionResult {
 
     @Override
     public String toString() {
-        return gson.toJson(this);
+        return ResourceKt.createJson(this);
     }
 }
