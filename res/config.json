@@ -1,5 +1,11 @@
 {
   "Comments": {
+    "connections": {
+      "host": "Hostname (without port) of server running the instance of PostgreSQL to which Stellar Core is bound.",
+      "database": "Name of the database to which Stellar Core saves its state.",
+      "user": "Name of user that has permissions to send read-only queries to the database.",
+      "password": "Password used to authenticate the user."
+    },
     "pool": "ID of the account that acts as the inflation pool when tests.mode is set to PRODUCTION.",
     "bank": "Secret seed of the account that should make payments.",
     "messages": {
@@ -30,6 +36,12 @@
       "rewardExceedsAmount": "The cap, in Lumens, at which a single reward being paid should be logged.",
       "rewardExceedsPercentOfPrize": "The cap, in percentage over the prize, at which a single reward being paid should be logged."
     }
+  },
+  "connections": {
+    "host": "localhost",
+    "database": "",
+    "user": "",
+    "password": ""
   },
   "pool": "",
   "bank": "",

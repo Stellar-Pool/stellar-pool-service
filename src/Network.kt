@@ -13,13 +13,14 @@ fun main(args: Array<String>) {
     multipleTestnetPayments()
 }
 
-// Can be executed locally
+// Tests
+// Can be run in isolation
 private fun multipleTestnetPayments() {
     val testNetwork = TestNetwork()
 
     val payment = Payment(testNetwork, String(testNetwork.sender.secretSeed))
     for (i in 1..150) {
-        payment.addDestination(testNetwork.receiver.accountId, "0.0000001")
+        payment.addDestination(testNetwork.receiver.accountId, "1")
     }
 
     testNetwork.printBalances()
@@ -30,6 +31,23 @@ private fun multipleTestnetPayments() {
 }
 
 // Must be executed on the host running Stellar Core
+fun singleMainnetPayment(sourceSecretSeed: String, destinationAccountId: String) {
+    val productionNetwork = ProductionNetwork()
+
+    val payment = Payment(productionNetwork, sourceSecretSeed)
+    val destination = KeyPair.fromAccountId(destinationAccountId)
+    payment.addDestination(destination.accountId, "0.0000001")
+
+    print("Destination account balance is ")
+    productionNetwork.printBalance(destination)
+    payment.send()
+    println("Wait 10 seconds...")
+    Thread.sleep(10000)
+    print("Destination account balance is ")
+    productionNetwork.printBalance(destination)
+}
+// =====
+
 fun runInflation(sourceSecretSeed: String, memoText: String) {
     val productionNetwork = ProductionNetwork()
     val executorKeys = KeyPair.fromSecretSeed(sourceSecretSeed)
@@ -48,27 +66,10 @@ fun runInflation(sourceSecretSeed: String, memoText: String) {
     }
 }
 
-fun singleMainnetPayment(sourceSecretSeed: String, destinationAccountId: String) {
-    val productionNetwork = ProductionNetwork()
-
-    val payment = Payment(productionNetwork, sourceSecretSeed)
-    val destination = KeyPair.fromAccountId(destinationAccountId)
-    payment.addDestination(destination.accountId, "0.0000001")
-
-    print("Destination account balance is ")
-    productionNetwork.printBalance(destination)
-    payment.send()
-    println("Wait 10 seconds...")
-    Thread.sleep(10000)
-    print("Destination account balance is ")
-    productionNetwork.printBalance(destination)
-}
-// ===================================================
-
-class Payment(val network: Network, sourceSecretSeed: String, memoText: String? = null) {
-    val sourceKeys: KeyPair = KeyPair.fromSecretSeed(sourceSecretSeed)
-    val sourceAccount: AccountResponse = network.accountOf(sourceKeys)
-    val memo: Memo? = if (memoText != null) Memo.text(memoText) else null
+class Payment(private val network: Network, sourceSecretSeed: String, memoText: String? = null) {
+    private val sourceKeys: KeyPair = KeyPair.fromSecretSeed(sourceSecretSeed)
+    private val sourceAccount: AccountResponse = network.accountOf(sourceKeys)
+    private val memo: Memo? = if (memoText != null) Memo.text(memoText) else null
     private val transactionBuilders: Deque<Transaction.Builder> = ArrayDeque<Transaction.Builder>()
 
     fun addDestination(destinationAccountId: String, amount: String) {
@@ -123,7 +124,7 @@ class TestNetwork : Network {
         org.stellar.sdk.Network.useTestNetwork()
     }
 
-    val server = Server("https://horizon-testnet.stellar.org")
+    private val server = Server("https://horizon-testnet.stellar.org")
 
     override fun accountOf(keyPair: KeyPair): AccountResponse = server.accounts().account(keyPair)
 
@@ -133,12 +134,12 @@ class TestNetwork : Network {
     }
 
     // Test utilities
-    val sender: KeyPair = KeyPair.fromSecretSeed("SBFJRAEZHMA6GB2OPELLRQVER57V6DLDT6PYJZSJGI4HMZPP7MCJ3QID")
-    val receiver: KeyPair = KeyPair.fromSecretSeed("SC4TQUMPJKW5S2UPGLPGSHJDTEEGATW2CS4AHXLJM4USUT2UXVUKVZGJ")
+    val sender: KeyPair = KeyPair.fromSecretSeed("SC4TQUMPJKW5S2UPGLPGSHJDTEEGATW2CS4AHXLJM4USUT2UXVUKVZGJ")
+    val receiver: KeyPair = KeyPair.fromSecretSeed("SBFJRAEZHMA6GB2OPELLRQVER57V6DLDT6PYJZSJGI4HMZPP7MCJ3QID")
 
     init {
-        assert(sender.accountId == "GDQSOMO3Z2VPQOCKJI2S5BRSVLHO5F5RN6SXKNFLAMGGXINFNTO4YI36", { "sender account keys check failed." })
-        assert(receiver.accountId == "GCVQMOB6ASUZUJQ3EGQI7WOOIQ6HI6MVPMQCUO5NJYMXIFW3UUF4LM3C", { "receiver account keys check failed." })
+        assert(sender.accountId == "GCVQMOB6ASUZUJQ3EGQI7WOOIQ6HI6MVPMQCUO5NJYMXIFW3UUF4LM3C", { "sender account keys check failed." })
+        assert(receiver.accountId == "GDQSOMO3Z2VPQOCKJI2S5BRSVLHO5F5RN6SXKNFLAMGGXINFNTO4YI36", { "receiver account keys check failed." })
     }
 
     fun printBalances() {
@@ -155,7 +156,7 @@ class ProductionNetwork : Network {
         org.stellar.sdk.Network.usePublicNetwork()
     }
 
-    val server = Server("https://horizon.stellar.org")
+    private val server = Server("https://horizon.stellar.org")
 
     override fun accountOf(keyPair: KeyPair): AccountResponse = server.accounts().account(keyPair)
 

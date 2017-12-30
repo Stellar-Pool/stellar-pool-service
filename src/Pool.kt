@@ -49,13 +49,14 @@ fun main(args: Array<String>) {
     }
 }
 
-class Pool(val pool: Account, val configuration: Configuration) {
+class Pool(private val pool: Account, private val configuration: Configuration) {
     private val connection: Connection
 
     init {
         Class.forName("org.postgresql.Driver")
         connection = DriverManager.getConnection(
-                "jdbc:postgresql://localhost:5432/stellar", "postgres", "sKzwnrYLumJA2sHVQ9j7YEMw")
+                "jdbc:postgresql://${configuration.connections.host}:5432/${configuration.connections.database}",
+                configuration.connections.user, configuration.connections.password)
         connection.autoCommit = false
     }
 
@@ -137,7 +138,7 @@ class Pool(val pool: Account, val configuration: Configuration) {
         println("${feesPrefix}Recalculated total amount of fees is ${feesComparison.relation.description} itself by ${feesComparison.delta}")
     }
 
-    class Header(val title: String, val length: Int = 72) {
+    class Header(private val title: String, private val length: Int = 72) {
         override fun toString(): String {
             val barLength = (length - title.length) / 2
             val bar = Collections.nCopies(barLength, '=').joinToString("")
@@ -188,7 +189,7 @@ class Pool(val pool: Account, val configuration: Configuration) {
     }
 
     class PaymentExecutor(private val noop: Boolean, senderSecretSeed: String, memo: String) {
-        val payment = if (noop) null else Payment(ProductionNetwork(), senderSecretSeed, memo)
+        private val payment = if (noop) null else Payment(ProductionNetwork(), senderSecretSeed, memo)
 
         fun pay(receiver: Account, amount: StellarCurrency) {
             if (noop) return
@@ -288,7 +289,7 @@ class StellarCurrency(val stroops: Long) : Comparable<StellarCurrency> {
     operator fun div(other: StellarCurrency) = StellarCurrency(stroops / other.stroops)
 }
 
-class Percent(val value: Double) : Comparable<Percent> {
+class Percent(private val value: Double) : Comparable<Percent> {
     companion object {
         val FORMATTER: NumberFormat = DecimalFormat.getNumberInstance()
     }

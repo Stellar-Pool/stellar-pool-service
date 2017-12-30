@@ -6,6 +6,7 @@ import it.menzani.stellarpool.StellarCurrency;
 import org.jetbrains.annotations.NotNull;
 
 public final class Configuration {
+    private Connections connections;
     private String pool;
     private String bank;
     private Messages messages;
@@ -13,6 +14,12 @@ public final class Configuration {
     private String feeCollector;
     private Tests tests;
     private SafetyThresholds safetyThresholds;
+
+    @NotNull
+    public Connections getConnections() {
+        if (connections == null) throw new MalformedConfigurationException("connections", "must not be null");
+        return connections;
+    }
 
     @NotNull
     public Account getPool() {
@@ -59,6 +66,40 @@ public final class Configuration {
         if (safetyThresholds == null)
             throw new MalformedConfigurationException("safetyThresholds", "must not be null");
         return safetyThresholds;
+    }
+
+    public static final class Connections {
+        private String host;
+        private String database;
+        private String user;
+        private String password;
+
+        @NotNull
+        public String getHost() {
+            if (host == null || host.isEmpty())
+                throw new MalformedConfigurationException("connections.host", "must not be null nor empty");
+            return host;
+        }
+
+        @NotNull
+        public String getDatabase() {
+            if (database == null || database.isEmpty())
+                throw new MalformedConfigurationException("connections.database", "must not be null nor empty");
+            return database;
+        }
+
+        @NotNull
+        public String getUser() {
+            if (user == null || user.isEmpty())
+                throw new MalformedConfigurationException("connections.user", "must not be null nor empty");
+            return user;
+        }
+
+        @NotNull
+        public String getPassword() {
+            if (password == null) throw new MalformedConfigurationException("connections.password", "must not be null");
+            return password;
+        }
     }
 
     public static final class Messages {

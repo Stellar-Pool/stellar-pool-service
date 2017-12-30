@@ -4,7 +4,9 @@ import com.google.gson.Gson
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.Reader
+import java.net.URL
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 
 val gson = Gson()
@@ -15,13 +17,13 @@ inline fun <reified T> parseJson(stream: InputStream, charsetName: String = "UTF
 enum class Resources(val resourceName: String) {
     DEFAULT_CONFIG("config.json");
 
-    val resource = ClassLoader.getSystemResource("it/menzani/stellarpool/$resourceName")
+    private val resource: URL = ClassLoader.getSystemResource("it/menzani/stellarpool/$resourceName")
 
     fun bytes() = resource.readBytes()
 }
 
 class ConfigurationFile {
-    val file = Paths.get(Resources.DEFAULT_CONFIG.resourceName)
+    private val file: Path = Paths.get(Resources.DEFAULT_CONFIG.resourceName)
 
     init {
         if (Files.notExists(file)) {
