@@ -121,7 +121,7 @@ public final class Configuration {
         }
     }
 
-    public static final class FeeDescriptor {
+    public static final class FeeDescriptor implements Comparable<FeeDescriptor> {
         private double threshold;
         private double fee;
 
@@ -133,6 +133,11 @@ public final class Configuration {
         @NotNull
         public Percent getFee() {
             return new Percent(fee);
+        }
+
+        @Override
+        public int compareTo(@NotNull FeeDescriptor other) {
+            return Double.compare(threshold, other.threshold);
         }
     }
 

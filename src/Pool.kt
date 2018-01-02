@@ -167,8 +167,10 @@ class Pool(private val pool: Account, private val configuration: Configuration) 
     }
 
     private fun calculateFee(votes: StellarCurrency): Percent {
+        val schedule = configuration.feeSchedule
+        schedule.sort()
         var fee: Percent? = null
-        for (descriptor in configuration.feeSchedule) {
+        for (descriptor in schedule) {
             if (votes < descriptor.threshold) {
                 continue
             }
