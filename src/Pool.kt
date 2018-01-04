@@ -138,7 +138,7 @@ class Pool(private val pool: Account, private val configuration: Configuration) 
         println("${feesPrefix}Recalculated total amount of fees is ${feesComparison.relation.description} itself by ${feesComparison.delta}")
     }
 
-    class Header(private val title: String, private val length: Int = 72) {
+    private class Header(private val title: String, private val length: Int = 72) {
         override fun toString(): String {
             val barLength = (length - title.length) / 2
             val bar = Collections.nCopies(barLength, '=').joinToString("")
@@ -158,9 +158,9 @@ class Pool(private val pool: Account, private val configuration: Configuration) 
         return ComparisonResult(relation, StellarCurrency(delta.absoluteValue))
     }
 
-    class ComparisonResult(val relation: Relation, val delta: StellarCurrency)
+    private class ComparisonResult(val relation: Relation, val delta: StellarCurrency)
 
-    enum class Relation(val description: String) {
+    private enum class Relation(val description: String) {
         LESSER("lesser than"),
         EQUAL("equal to"),
         GREATER("greater than");
@@ -180,7 +180,7 @@ class Pool(private val pool: Account, private val configuration: Configuration) 
         return fee
     }
 
-    class FeeTracker {
+    private class FeeTracker {
         var total = StellarCurrency.ZERO
         var counter = 0
 
@@ -190,7 +190,7 @@ class Pool(private val pool: Account, private val configuration: Configuration) 
         }
     }
 
-    class PaymentExecutor(private val noop: Boolean, senderSecretSeed: String, memo: String) {
+    private class PaymentExecutor(private val noop: Boolean, senderSecretSeed: String, memo: String) {
         private val payment = if (noop) null else Payment(ProductionNetwork(), senderSecretSeed, memo)
 
         fun pay(receiver: Account, amount: StellarCurrency) {
