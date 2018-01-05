@@ -16,7 +16,8 @@ import kotlin.math.roundToLong
 fun main(args: Array<String>) {
     val configuration = ConfigurationFile().open()
     if (args.isNotEmpty() && args[0] == "--run-inflation") {
-        runInflation(configuration.bank, configuration.messages.inflation)
+        val inflation = Inflation(ProductionNetwork(), configuration.messages.inflation)
+        inflation.run(configuration.bank)
         return
     }
     when (configuration.tests.mode) {
@@ -209,6 +210,7 @@ class Pool(private val pool: Account, private val configuration: Configuration) 
     }
 
     // Database queries
+
     private fun countAccounts(): Long {
         val statement = connection.createStatement()
         val results = statement.executeQuery("SELECT COUNT(*) FROM accounts")
@@ -246,6 +248,7 @@ class Pool(private val pool: Account, private val configuration: Configuration) 
             override fun next() = Account(results.getString(1), StellarCurrency(results.getLong(2)))
         }
     }
+
     // ================
 }
 

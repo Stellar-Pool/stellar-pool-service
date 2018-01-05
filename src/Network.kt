@@ -1,36 +1,39 @@
 package it.menzani.stellarpool
 
+import it.menzani.stellarpool.TestAccounts.destinationKeys
+import it.menzani.stellarpool.TestAccounts.sourceKeys
 import it.menzani.stellarpool.serialization.TransactionResult
 import it.menzani.stellarpool.serialization.parseJson
 import org.stellar.sdk.*
 import org.stellar.sdk.responses.AccountResponse
 import org.stellar.sdk.responses.SubmitTransactionResponse
+import java.net.ConnectException
 import java.net.URL
 import java.net.URLEncoder
 import java.util.*
 
-fun runInflation(sourceSecretSeed: String, memoText: String) {
-    val productionNetwork = ProductionNetwork()
-    val executorKeys = KeyPair.fromSecretSeed(sourceSecretSeed)
-    val executor: AccountResponse = productionNetwork.accountOf(executorKeys)
-    val transaction = Transaction.Builder(executor)
-            .addOperation(InflationOperation())
-            .addMemo(Memo.text(memoText))
-            .build()
-    transaction.sign(executorKeys)
-    try {
-        productionNetwork.makeTransaction(transaction)
-        println("Inflation has run.")
-    } catch (e: TransactionFailedException) {
-        println("Could not make transaction.")
-        println(e.result)
+class Inflation(private val network: Network, private val memo: String? = null) {
+    fun run(executorSecretSeed: String) {
+        val executorKeys = KeyPair.fromSecretSeed(executorSecretSeed)
+        val executor: AccountResponse = network.accountOf(executorKeys)
+        val transaction = Transaction.Builder(executor)
+                .addOperation(InflationOperation())
+                .addMemoIfPresent(memo)
+                .build()
+        transaction.sign(executorKeys)
+        try {
+            network.makeTransaction(transaction)
+            println("Inflation has run.")
+        } catch (e: TransactionFailedException) {
+            print("Could not make transaction: ")
+            println(e.result)
+        }
     }
 }
 
-class Payment(private val network: Network, sourceSecretSeed: String, memoText: String? = null) {
+class Payment(private val network: Network, sourceSecretSeed: String, private val memo: String? = null) {
     val sourceKeys: KeyPair = KeyPair.fromSecretSeed(sourceSecretSeed)
     private val sourceAccount: AccountResponse = network.accountOf(sourceKeys)
-    private val memo: Memo? = if (memoText != null) Memo.text(memoText) else null
     private val transactionBuilders: Deque<Transaction.Builder> = ArrayDeque<Transaction.Builder>()
 
     fun addDestination(destinationAccountId: String, amount: String) {
@@ -42,8 +45,7 @@ class Payment(private val network: Network, sourceSecretSeed: String, memoText: 
     private fun addOperation(payment: PaymentOperation) {
         var transactionBuilder = transactionBuilders.peekFirst()
         if (transactionBuilder == null || transactionBuilder.operationsCount == 100) {
-            transactionBuilder = Transaction.Builder(sourceAccount)
-            if (memo != null) transactionBuilder.addMemo(memo)
+            transactionBuilder = Transaction.Builder(sourceAccount).addMemoIfPresent(memo)
             transactionBuilders.addFirst(transactionBuilder)
         }
         transactionBuilder.addOperation(payment)
@@ -60,10 +62,18 @@ class Payment(private val network: Network, sourceSecretSeed: String, memoText: 
                 network.makeTransaction(transaction)
                 println("  Executed transaction #$i")
             } catch (e: TransactionFailedException) {
-                println("  Transaction failed #$i")
+                print("  Transaction failed #$i: ")
+                println(e.result)
             }
         }
     }
+}
+
+private fun Transaction.Builder.addMemoIfPresent(memoText: String?): Transaction.Builder {
+    if (memoText != null) {
+        this.addMemo(Memo.text(memoText))
+    }
+    return this
 }
 
 interface Network {
@@ -71,7 +81,7 @@ interface Network {
     fun makeTransaction(transaction: Transaction)
 }
 
-class TransactionFailedException(val result: Any) : Exception()
+class TransactionFailedException(val result: Any, cause: Throwable? = null) : Exception(cause)
 
 class TestNetwork : Network {
     init {
@@ -88,6 +98,9 @@ class TestNetwork : Network {
     }
 }
 
+/**
+ * If used, the program must be executed on the host running Stellar Core.
+ */
 class ProductionNetwork : Network {
     init {
         org.stellar.sdk.Network.usePublicNetwork()
@@ -99,29 +112,41 @@ class ProductionNetwork : Network {
 
     override fun makeTransaction(transaction: Transaction) {
         val blob = URLEncoder.encode(transaction.toEnvelopeXdrBase64(), "UTF-8")
-        val stream = URL("http://localhost:11626/tx?blob=$blob").openStream()
+        val stream = try {
+            URL("http://localhost:11626/tx?blob=$blob").openStream()
+        } catch (e: ConnectException) {
+            throw TransactionFailedException("Could not send HTTP command to Stellar Core. Is it running on localhost?", e)
+        }
         val result: TransactionResult = parseJson(stream)
         if (result.status != "PENDING") throw TransactionFailedException(result)
     }
 }
 
 // Tests
-// Can be run in isolation
-private fun multipleTestnetPayments() {
-    val sourceKeys = KeyPair.fromSecretSeed("SC4TQUMPJKW5S2UPGLPGSHJDTEEGATW2CS4AHXLJM4USUT2UXVUKVZGJ")
-    val destinationKeys = KeyPair.fromSecretSeed("SBFJRAEZHMA6GB2OPELLRQVER57V6DLDT6PYJZSJGI4HMZPP7MCJ3QID")
-    assert(sourceKeys.accountId == "GCVQMOB6ASUZUJQ3EGQI7WOOIQ6HI6MVPMQCUO5NJYMXIFW3UUF4LM3C", { "sender account keys check failed." })
-    assert(destinationKeys.accountId == "GDQSOMO3Z2VPQOCKJI2S5BRSVLHO5F5RN6SXKNFLAMGGXINFNTO4YI36", { "receiver account keys check failed." })
 
+private fun runInflation() {
+    val inflation = Inflation(TestNetwork())
+    inflation.run(sourceKeys.secretSeedString)
+}
+
+private fun multipleTestnetPayments() {
     val test = PaymentTest(TestNetwork())
     test.makePayment(sourceKeys, destinationKeys, 150)
 }
 
 fun main(args: Array<String>) {
-    multipleTestnetPayments()
+    if (args.isEmpty()) {
+        println("Arguments: <function>")
+        println("  <function> – Name of test function to run.")
+        return
+    }
+    when (args[0]) {
+        "runInflation" -> runInflation()
+        "multipleTestnetPayments" -> multipleTestnetPayments()
+        else -> println("Invalid function name.")
+    }
 }
 
-// Must be executed on the host running Stellar Core
 fun singleMainnetPayment(sourceSecretSeed: String, destinationAccountId: String) {
     val sourceKeys = KeyPair.fromSecretSeed(sourceSecretSeed)
     val destinationKeys = KeyPair.fromAccountId(destinationAccountId)
@@ -129,11 +154,23 @@ fun singleMainnetPayment(sourceSecretSeed: String, destinationAccountId: String)
     val test = PaymentTest(ProductionNetwork())
     test.makePayment(sourceKeys, destinationKeys)
 }
-// =====
+
+object TestAccounts {
+    val sourceKeys: KeyPair = KeyPair.fromSecretSeed("SC4TQUMPJKW5S2UPGLPGSHJDTEEGATW2CS4AHXLJM4USUT2UXVUKVZGJ")
+    val destinationKeys: KeyPair = KeyPair.fromSecretSeed("SBFJRAEZHMA6GB2OPELLRQVER57V6DLDT6PYJZSJGI4HMZPP7MCJ3QID")
+
+    init {
+        assert(sourceKeys.accountId == "GCVQMOB6ASUZUJQ3EGQI7WOOIQ6HI6MVPMQCUO5NJYMXIFW3UUF4LM3C", { "Source account keys check failed." })
+        assert(destinationKeys.accountId == "GDQSOMO3Z2VPQOCKJI2S5BRSVLHO5F5RN6SXKNFLAMGGXINFNTO4YI36", { "Destination account keys check failed." })
+    }
+}
+
+private val KeyPair.secretSeedString
+    get() = String(this.secretSeed)
 
 class PaymentTest(private val network: Network) {
     fun makePayment(sourceKeys: KeyPair, destinationKeys: KeyPair, repeat: Int = 1) {
-        val payment = Payment(network, String(sourceKeys.secretSeed))
+        val payment = Payment(network, sourceKeys.secretSeedString)
         for (i in 1..repeat) {
             payment.addDestination(destinationKeys.accountId, "0.0000001")
         }
@@ -165,3 +202,5 @@ class PaymentTest(private val network: Network) {
         }
     }
 }
+
+// =====
