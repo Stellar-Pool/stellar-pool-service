@@ -1,10 +1,10 @@
 package it.menzani.stellarpool
 
 import it.menzani.stellarpool.Pool.Relation.*
-import it.menzani.stellarpool.serialization.Configuration
-import it.menzani.stellarpool.serialization.Configuration.Tests.Mode.*
 import it.menzani.stellarpool.serialization.ConfigurationFile
 import it.menzani.stellarpool.serialization.MalformedConfigurationException
+import it.menzani.stellarpool.serialization.pool.Configuration
+import it.menzani.stellarpool.serialization.pool.Configuration.Tests.Mode.*
 import java.sql.Connection
 import java.sql.DriverManager
 import java.text.DecimalFormat
@@ -15,9 +15,21 @@ import kotlin.math.roundToLong
 
 fun main(args: Array<String>) {
     val configuration = ConfigurationFile().open()
-    if (args.isNotEmpty() && args[0] == "--run-inflation") {
-        val inflation = Inflation(ProductionNetwork(), configuration.messages.inflation)
-        inflation.run(configuration.bank)
+    if (args.isNotEmpty()) {
+        when (args[0]) {
+            "--run-inflation" -> {
+                val inflation = Inflation(ProductionNetwork(), configuration.messages.inflation)
+                inflation.run(configuration.bank)
+            }
+            "--start-horizon" -> {
+                val horizon = Horizon(configuration.horizon)
+                val networkStatistics = NetworkStatistics(CoreDatabase(configuration.pool, configuration.core))
+                horizon.addEndpoint(networkStatistics)
+                        .addEndpoint(UsageStatistics(horizon, networkStatistics))
+                        .listen()
+            }
+            else -> println("Invalid command.")
+        }
         return
     }
     when (configuration.tests.mode) {
@@ -28,13 +40,13 @@ fun main(args: Array<String>) {
                 println("  ['--execute'] — If unset, gets an overview of what would be done, without actually executing payments.")
                 return
             }
-            val pool = Pool(configuration.pool, configuration)
+            val pool = Pool(CoreDatabase(configuration.pool, configuration.core), configuration)
             val prize = StellarCurrency.ofLumens(args[0].toDouble())
             val execute = args.size != 1 && args[1] == "--execute"
             pool.distribute(prize, execute)
         }
         TEST_POOL -> {
-            val pool = Pool(configuration.tests.testPool, configuration)
+            val pool = Pool(CoreDatabase(configuration.tests.testPool, configuration.core), configuration)
             val prize = StellarCurrency.ofLumens(Math.random() * 10000)
             pool.distribute(prize)
         }
@@ -50,27 +62,67 @@ fun main(args: Array<String>) {
     }
 }
 
-class Pool(private val pool: Account, private val configuration: Configuration) {
+class CoreDatabase(private val pool: Account, configuration: Configuration.Core) {
     private val connection: Connection
 
     init {
         Class.forName("org.postgresql.Driver")
         connection = DriverManager.getConnection(
-                "jdbc:postgresql://${configuration.connections.host}:5432/${configuration.connections.database}",
-                configuration.connections.user, configuration.connections.password)
+                "jdbc:postgresql://${configuration.host}:5432/${configuration.database}",
+                configuration.user, configuration.password)
         connection.autoCommit = false
     }
 
+    fun countAccounts(): Long {
+        val statement = connection.createStatement()
+        val results = statement.executeQuery("SELECT COUNT(*) FROM accounts")
+        assert(results.next(), { "Query returned no results." })
+        return results.getLong(1)
+    }
+
+    fun countVoters(): Long {
+        val statement = connection.createStatement()
+        val results = statement.executeQuery("SELECT COUNT(*) FROM accounts WHERE inflationdest='${pool.address}'")
+        assert(results.next(), { "Query returned no results." })
+        return results.getLong(1)
+    }
+
+    fun circulatingSupply(): StellarCurrency {
+        val statement = connection.createStatement()
+        val results = statement.executeQuery("SELECT SUM(balance) FROM accounts")
+        assert(results.next(), { "Query returned no results." })
+        return StellarCurrency(results.getLong(1))
+    }
+
+    fun totalVotes(): StellarCurrency {
+        val statement = connection.createStatement()
+        val results = statement.executeQuery("SELECT SUM(balance) FROM accounts WHERE inflationdest='${pool.address}'")
+        assert(results.next(), { "Query returned no results." })
+        return StellarCurrency(results.getLong(1))
+    }
+
+    fun getVoters(): Iterator<Account> {
+        val statement = connection.createStatement()
+        val results = statement.executeQuery("SELECT accountid, balance FROM accounts WHERE inflationdest='${pool.address}'")
+        return object : Iterator<Account> {
+            override fun hasNext() = results.next()
+
+            override fun next() = Account(results.getString(1), StellarCurrency(results.getLong(2)))
+        }
+    }
+}
+
+class Pool(private val database: CoreDatabase, private val configuration: Configuration) {
     fun distribute(prize: StellarCurrency, execute: Boolean = false) {
         val formatter = NumberFormat.getNumberInstance()
         println(Header("Network info"))
-        val accountsCount = formatter.format(countAccounts())
+        val accountsCount = formatter.format(database.countAccounts())
         println("Total number of accounts is $accountsCount")
-        val circulatingSupply = circulatingSupply()
+        val circulatingSupply = database.circulatingSupply()
         println("These accounts own $circulatingSupply")
-        val totalVotes = totalVotes()
+        val totalVotes = database.totalVotes()
         println("Total number of votes is $totalVotes")
-        val votersCount = formatter.format(countVoters())
+        val votersCount = formatter.format(database.countVoters())
         println("These votes come from $votersCount accounts")
 
         println(Header("Overview"))
@@ -87,7 +139,7 @@ class Pool(private val pool: Account, private val configuration: Configuration) 
         var totalRewards = StellarCurrency.ZERO
         var totalActualRewards = StellarCurrency.ZERO
         val fees = TreeMap<Percent, FeeTracker>()
-        for (account in getVoters()) {
+        for (account in database.getVoters()) {
             val rewardFactor = account.balance!!.stroops / totalVotes.stroops.toDouble()
             val reward = StellarCurrency((rewardFactor * prize.stroops).roundToLong())
 
@@ -208,48 +260,6 @@ class Pool(private val pool: Account, private val configuration: Configuration) 
             payment!!.send()
         }
     }
-
-    // Database queries
-
-    private fun countAccounts(): Long {
-        val statement = connection.createStatement()
-        val results = statement.executeQuery("SELECT COUNT(*) FROM accounts")
-        assert(results.next(), { "Query returned no results." })
-        return results.getLong(1)
-    }
-
-    private fun countVoters(): Long {
-        val statement = connection.createStatement()
-        val results = statement.executeQuery("SELECT COUNT(*) FROM accounts WHERE inflationdest='${pool.address}'")
-        assert(results.next(), { "Query returned no results." })
-        return results.getLong(1)
-    }
-
-    private fun circulatingSupply(): StellarCurrency {
-        val statement = connection.createStatement()
-        val results = statement.executeQuery("SELECT SUM(balance) FROM accounts")
-        assert(results.next(), { "Query returned no results." })
-        return StellarCurrency(results.getLong(1))
-    }
-
-    private fun totalVotes(): StellarCurrency {
-        val statement = connection.createStatement()
-        val results = statement.executeQuery("SELECT SUM(balance) FROM accounts WHERE inflationdest='${pool.address}'")
-        assert(results.next(), { "Query returned no results." })
-        return StellarCurrency(results.getLong(1))
-    }
-
-    private fun getVoters(): Iterator<Account> {
-        val statement = connection.createStatement()
-        val results = statement.executeQuery("SELECT accountid, balance FROM accounts WHERE inflationdest='${pool.address}'")
-        return object : Iterator<Account> {
-            override fun hasNext() = results.next()
-
-            override fun next() = Account(results.getString(1), StellarCurrency(results.getLong(2)))
-        }
-    }
-
-    // ================
 }
 
 class Account(val address: String, val balance: StellarCurrency? = null) {

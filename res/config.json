@@ -1,11 +1,17 @@
 {
   "Comments": {
-    "connections": {
+    "core": {
       "This element's field": "Sends read-only queries to the database to which Stellar Core is bound.",
       "host": "Hostname (without port) of the server running the instance of PostgreSQL to connect to.",
       "database": "Name of the database to which Stellar Core saves its state.",
       "user": "Name of the user that has permissions to query the database.",
       "password": "Password used to authenticate the user."
+    },
+    "horizon": {
+      "This element's field": "Built-in HTTP API.",
+      "port": "Port on which the HTTP server listens for connections.",
+      "password": "Password required to use the API.",
+      "parallelism": "Number of threads used by the HTTP server. Set to 0 to grow as needed."
     },
     "pool": "ID of the account that acts as the inflation pool when tests.mode is set to PRODUCTION.",
     "bank": "Secret seed of the account that should make payments.",
@@ -38,11 +44,16 @@
       "rewardExceedsPercentOfPrize": "The cap, in percentage over the prize, at which a single reward being paid should be logged."
     }
   },
-  "connections": {
+  "core": {
     "host": "localhost",
     "database": "",
     "user": "",
     "password": ""
+  },
+  "horizon": {
+    "port": 8080,
+    "password": "",
+    "parallelism": 0
   },
   "pool": "",
   "bank": "",

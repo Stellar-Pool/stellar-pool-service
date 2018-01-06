@@ -1,4 +1,6 @@
-package it.menzani.stellarpool.serialization;
+package it.menzani.stellarpool.serialization.pool;
+
+import it.menzani.stellarpool.serialization.ResourceKt;
 
 public final class TransactionResult {
     private String status;

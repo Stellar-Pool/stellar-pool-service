@@ -1,12 +1,16 @@
-package it.menzani.stellarpool.serialization;
+package it.menzani.stellarpool.serialization.pool;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import it.menzani.stellarpool.Account;
 import it.menzani.stellarpool.Percent;
 import it.menzani.stellarpool.StellarCurrency;
+import it.menzani.stellarpool.serialization.MalformedConfigurationException;
 import org.jetbrains.annotations.NotNull;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public final class Configuration {
-    private Connections connections;
+    private Core core;
+    private Horizon horizon;
     private String pool;
     private String bank;
     private Messages messages;
@@ -16,9 +20,15 @@ public final class Configuration {
     private SafetyThresholds safetyThresholds;
 
     @NotNull
-    public Connections getConnections() {
-        if (connections == null) throw new MalformedConfigurationException("connections", "must not be null");
-        return connections;
+    public Core getCore() {
+        if (core == null) throw new MalformedConfigurationException("core", "must not be null");
+        return core;
+    }
+
+    @NotNull
+    public Horizon getHorizon() {
+        if (horizon == null) throw new MalformedConfigurationException("horizon", "must not be null");
+        return horizon;
     }
 
     @NotNull
@@ -68,7 +78,7 @@ public final class Configuration {
         return safetyThresholds;
     }
 
-    public static final class Connections {
+    public static final class Core {
         private String host;
         private String database;
         private String user;
@@ -77,28 +87,50 @@ public final class Configuration {
         @NotNull
         public String getHost() {
             if (host == null || host.isEmpty())
-                throw new MalformedConfigurationException("connections.host", "must not be null nor empty");
+                throw new MalformedConfigurationException("core.host", "must not be null nor empty");
             return host;
         }
 
         @NotNull
         public String getDatabase() {
             if (database == null || database.isEmpty())
-                throw new MalformedConfigurationException("connections.database", "must not be null nor empty");
+                throw new MalformedConfigurationException("core.database", "must not be null nor empty");
             return database;
         }
 
         @NotNull
         public String getUser() {
             if (user == null || user.isEmpty())
-                throw new MalformedConfigurationException("connections.user", "must not be null nor empty");
+                throw new MalformedConfigurationException("core.user", "must not be null nor empty");
             return user;
         }
 
         @NotNull
         public String getPassword() {
-            if (password == null) throw new MalformedConfigurationException("connections.password", "must not be null");
+            if (password == null) throw new MalformedConfigurationException("core.password", "must not be null");
             return password;
+        }
+    }
+
+    public static final class Horizon {
+        private short port;
+        private String password;
+        private int parallelism;
+
+        public int getPort() {
+            if (port < 0) throw new MalformedConfigurationException("horizon.port", "must be positive");
+            return port;
+        }
+
+        @NotNull
+        public String getPassword() {
+            if (password == null) throw new MalformedConfigurationException("horizon.password", "must not be null");
+            return password;
+        }
+
+        public int getParallelism() {
+            if (parallelism < 0) throw new MalformedConfigurationException("horizon.parallelism", "must be positive");
+            return parallelism;
         }
     }
 

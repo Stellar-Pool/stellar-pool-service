@@ -1,8 +1,11 @@
 package it.menzani.stellarpool.serialization
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect
 import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.annotation.PropertyAccessor
 import com.fasterxml.jackson.databind.ObjectMapper
 import it.menzani.stellarpool.serialization.Jackson.mapper
+import it.menzani.stellarpool.serialization.pool.Configuration
 import java.io.InputStream
 import java.io.Reader
 import java.net.URL
@@ -16,7 +19,9 @@ fun createJson(value: Any): String = mapper.writeValueAsString(value)
 
 object Jackson {
     @PublishedApi
-    internal val mapper = ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_NULL)
+    internal val mapper = ObjectMapper()
+            .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+            .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
 }
 
 enum class Resources(val resourceName: String) {
