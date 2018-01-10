@@ -64,7 +64,6 @@ class Horizon(private val configuration: Configuration.Horizon) {
     }
 
     fun listen() {
-        addEndpoint(Stop())
         server.executor = if (configuration.parallelism == 0) Executors.newCachedThreadPool() else
             Executors.newFixedThreadPool(configuration.parallelism)
         server.start()
@@ -107,6 +106,9 @@ class Horizon(private val configuration: Configuration.Horizon) {
         }
 
         private fun doServiceAuthenticated(parameters: Map<String, String>): Any {
+            if (configuration.password.isEmpty()) {
+                return endpoint.service(parameters)
+            }
             if ("password" !in parameters) return Problem("You must specify a password.")
             if (parameters["password"] == configuration.password) return try {
                 endpoint.service(parameters)
