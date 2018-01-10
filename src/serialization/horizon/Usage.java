@@ -15,6 +15,7 @@ public final class Usage {
         this.network = network;
     }
 
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
     public static final class Network {
         private final long accountsCount;
         private final long circulatingSupply;
@@ -30,6 +31,7 @@ public final class Usage {
             this.summary = summary;
         }
 
+        @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
         public static final class Summary {
             private final long totalRequests;
             private final long totalTime;
