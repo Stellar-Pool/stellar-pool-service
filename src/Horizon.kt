@@ -1,25 +1,60 @@
 package it.menzani.stellarpool
 
-import com.sun.net.httpserver.HttpExchange
-import com.sun.net.httpserver.HttpHandler
-import com.sun.net.httpserver.HttpServer
-import it.menzani.stellarpool.logging.AsynchronousLogger
+import com.sun.net.httpserver.*
 import it.menzani.stellarpool.logging.FileConsumer
 import it.menzani.stellarpool.logging.Logger
+import it.menzani.stellarpool.logging.SynchronousLogger
 import it.menzani.stellarpool.serialization.createJson
 import it.menzani.stellarpool.serialization.horizon.*
 import it.menzani.stellarpool.serialization.pool.Configuration
 import java.net.InetSocketAddress
+import java.nio.file.Files
 import java.nio.file.Paths
+import java.security.KeyStore
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import javax.net.ssl.KeyManagerFactory
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
 
 class Horizon(private val configuration: Configuration.Horizon) {
-    private val log: Logger = AsynchronousLogger().addConsumer(FileConsumer(Paths.get("horizon.log")))
-    internal val server = HttpServer.create(InetSocketAddress(configuration.port), 0)
+    private val log: Logger = SynchronousLogger().addConsumer(FileConsumer(Paths.get("horizon.log")))
+    internal val server: HttpServer
+
+    init {
+        log.header { "Starting Horizon..." }
+        val address = InetSocketAddress(configuration.port)
+        server = if (configuration.certificate.isSslEnabled) {
+            log.info { "HTTPS is enabled." }
+            val keyStore = KeyStore.getInstance(configuration.certificate.type)
+            keyStore.load(Files.newInputStream(configuration.certificate.file), configuration.certificate.password)
+            val keyManagerFactory = KeyManagerFactory.getInstance("SunX509")
+            keyManagerFactory.init(keyStore, configuration.certificate.password)
+            val trustManagerFactory = TrustManagerFactory.getInstance("SunX509")
+            trustManagerFactory.init(keyStore)
+            val sslContext = SSLContext.getInstance("TLS")
+            sslContext.init(keyManagerFactory.keyManagers, trustManagerFactory.trustManagers, null)
+            val server = HttpsServer.create(address, configuration.backlog)
+            server.httpsConfigurator = CertificateHandler(sslContext)
+            server
+        } else {
+            HttpServer.create(address, configuration.backlog)
+        }
+    }
+
+    private class CertificateHandler(sslContext: SSLContext) : HttpsConfigurator(sslContext) {
+        override fun configure(parameters: HttpsParameters) {
+            val sslContext = SSLContext.getDefault()
+            val sslEngine = sslContext.createSSLEngine()
+            parameters.needClientAuth = false
+            parameters.cipherSuites = sslEngine.enabledCipherSuites
+            parameters.protocols = sslEngine.enabledProtocols
+            parameters.setSSLParameters(sslContext.defaultSSLParameters)
+        }
+    }
 
     fun addEndpoint(endpoint: Endpoint): Horizon {
         val name = '/' + endpoint.name
@@ -30,8 +65,8 @@ class Horizon(private val configuration: Configuration.Horizon) {
 
     fun listen() {
         addEndpoint(Stop())
-        val parallelism = configuration.parallelism
-        server.executor = if (parallelism == 0) Executors.newCachedThreadPool() else Executors.newFixedThreadPool(parallelism)
+        server.executor = if (configuration.parallelism == 0) Executors.newCachedThreadPool() else
+            Executors.newFixedThreadPool(configuration.parallelism)
         server.start()
         log.info { "Horizon has started." }
     }
@@ -58,6 +93,7 @@ class Horizon(private val configuration: Configuration.Horizon) {
             log.fine { "Got request from ${exchange.remoteAddress}" }
             val response = doServiceAuthenticated(parameters)
             exchange.responseHeaders.set("Content-Type", "application/json; charset=UTF-8")
+            exchange.responseHeaders.set("Access-Control-Allow-Origin", "*")
             exchange.writeBody(createJson(response))
             exchange.close()
         }
@@ -107,7 +143,7 @@ interface Endpoint {
     fun service(parameters: Map<String, String>): Any
 }
 
-class NetworkStatistics(private val database: CoreDatabase) : Endpoint {
+class NetworkInfo(private val database: CoreDatabase) : Endpoint {
     internal val totalRequests = AtomicLong()
     internal val totalTime = AtomicLong()
 
@@ -125,7 +161,7 @@ class NetworkStatistics(private val database: CoreDatabase) : Endpoint {
             "countAccounts" -> {
                 accountsCount.incrementAndGet()
                 val accountsCount = database.countAccounts()
-                accountsCount.toString()
+                accountsCount
             }
             "circulatingSupply" -> {
                 circulatingSupply.incrementAndGet()
@@ -140,7 +176,7 @@ class NetworkStatistics(private val database: CoreDatabase) : Endpoint {
             "countVoters" -> {
                 votersCount.incrementAndGet()
                 val votersCount = database.countVoters()
-                votersCount.toString()
+                votersCount
             }
             null, "" -> return Problem("You must specify an action.")
             else -> return Problem("Invalid action.")
@@ -161,7 +197,7 @@ private class Profiler {
     }
 }
 
-class UsageStatistics(private val horizon: Horizon, private val networkStatistics: NetworkStatistics) : Endpoint {
+class UsageStatistics(private val horizon: Horizon, private val networkInfo: NetworkInfo) : Endpoint {
     override val name = "usage"
 
     override fun service(parameters: Map<String, String>): Any {
@@ -169,13 +205,13 @@ class UsageStatistics(private val horizon: Horizon, private val networkStatistic
         return Usage(
                 horizonServerExecutor.largestPoolSize,
                 Usage.Network(
-                        networkStatistics.accountsCount.get(),
-                        networkStatistics.circulatingSupply.get(),
-                        networkStatistics.totalVotes.get(),
-                        networkStatistics.votersCount.get(),
+                        networkInfo.accountsCount.get(),
+                        networkInfo.circulatingSupply.get(),
+                        networkInfo.totalVotes.get(),
+                        networkInfo.votersCount.get(),
                         Usage.Network.Summary(
-                                networkStatistics.totalRequests.get(),
-                                networkStatistics.totalTime.get(),
+                                networkInfo.totalRequests.get(),
+                                networkInfo.totalTime.get(),
                                 TimeUnit.MILLISECONDS)))
     }
 }

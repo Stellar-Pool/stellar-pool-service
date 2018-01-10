@@ -7,7 +7,10 @@ import it.menzani.stellarpool.StellarCurrency;
 import it.menzani.stellarpool.serialization.MalformedConfigurationException;
 import org.jetbrains.annotations.NotNull;
 
-@JsonIgnoreProperties(ignoreUnknown = true)
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+@JsonIgnoreProperties("Comments")
 public final class Configuration {
     private Core core;
     private Horizon horizon;
@@ -114,12 +117,24 @@ public final class Configuration {
 
     public static final class Horizon {
         private short port;
-        private String password;
+        private int backlog;
         private int parallelism;
+        private String password;
+        private Certificate certificate;
 
         public int getPort() {
             if (port < 0) throw new MalformedConfigurationException("horizon.port", "must be positive");
             return port;
+        }
+
+        public int getBacklog() {
+            if (backlog < 0) throw new MalformedConfigurationException("horizon.backlog", "must be positive");
+            return backlog;
+        }
+
+        public int getParallelism() {
+            if (parallelism < 0) throw new MalformedConfigurationException("horizon.parallelism", "must be positive");
+            return parallelism;
         }
 
         @NotNull
@@ -128,9 +143,43 @@ public final class Configuration {
             return password;
         }
 
-        public int getParallelism() {
-            if (parallelism < 0) throw new MalformedConfigurationException("horizon.parallelism", "must be positive");
-            return parallelism;
+        @NotNull
+        public Certificate getCertificate() {
+            if (certificate == null)
+                throw new MalformedConfigurationException("horizon.certificate", "must not be null");
+            return certificate;
+        }
+
+        public static final class Certificate {
+            private boolean sslEnabled;
+            private String file;
+            private String type;
+            private String password;
+
+            public boolean isSslEnabled() {
+                return sslEnabled;
+            }
+
+            @NotNull
+            public Path getFile() {
+                if (file == null || file.isEmpty())
+                    throw new MalformedConfigurationException("horizon.certificate.file", "must not be null nor empty");
+                return Paths.get(file);
+            }
+
+            @NotNull
+            public String getType() {
+                if (type == null || type.isEmpty())
+                    throw new MalformedConfigurationException("horizon.certificate.type", "must not be null nor empty");
+                return type;
+            }
+
+            @NotNull
+            public char[] getPassword() {
+                if (password == null || password.isEmpty())
+                    throw new MalformedConfigurationException("horizon.certificate.password", "must not be null nor empty");
+                return password.toCharArray();
+            }
         }
     }
 

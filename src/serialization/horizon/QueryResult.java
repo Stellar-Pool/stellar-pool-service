@@ -1,9 +1,11 @@
 package it.menzani.stellarpool.serialization.horizon;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.TimeUnit;
 
+@JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
 public final class QueryResult {
     private final Object result;
     private final long queryTime;

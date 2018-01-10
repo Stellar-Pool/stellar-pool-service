@@ -23,9 +23,9 @@ fun main(args: Array<String>) {
             }
             "--start-horizon" -> {
                 val horizon = Horizon(configuration.horizon)
-                val networkStatistics = NetworkStatistics(CoreDatabase(configuration.pool, configuration.core))
-                horizon.addEndpoint(networkStatistics)
-                        .addEndpoint(UsageStatistics(horizon, networkStatistics))
+                val networkInfo = NetworkInfo(CoreDatabase(configuration.pool, configuration.core))
+                horizon.addEndpoint(networkInfo)
+                        .addEndpoint(UsageStatistics(horizon, networkInfo))
                         .listen()
             }
             else -> println("Invalid command.")

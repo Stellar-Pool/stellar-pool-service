@@ -10,8 +10,15 @@
     "horizon": {
       "This element's field": "Built-in HTTP API.",
       "port": "Port on which the HTTP server listens for connections.",
+      "backlog": "Maximum number of incoming TCP connections that are queued. Set to 0 to use a system default.",
+      "parallelism": "Number of threads used by the HTTP server. Set to 0 to grow as needed.",
       "password": "Password required to use the API.",
-      "parallelism": "Number of threads used by the HTTP server. Set to 0 to grow as needed."
+      "certificate": {
+        "sslEnabled": "Whether to accept HTTPS connections.",
+        "file": "Keystore file of the certificate issued by a Certification Authority.",
+        "type": "Type of the keystore file.",
+        "password": "Password required to unlock the keystore."
+      }
     },
     "pool": "ID of the account that acts as the inflation pool when tests.mode is set to PRODUCTION.",
     "bank": "Secret seed of the account that should make payments.",
@@ -52,8 +59,15 @@
   },
   "horizon": {
     "port": 8080,
+    "backlog": 0,
+    "parallelism": 0,
     "password": "",
-    "parallelism": 0
+    "certificate": {
+      "sslEnabled": false,
+      "file": "horizon.p12",
+      "type": "PKCS12",
+      "password": ""
+    }
   },
   "pool": "",
   "bank": "",

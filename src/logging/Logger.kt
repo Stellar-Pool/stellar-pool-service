@@ -12,6 +12,7 @@ import java.util.concurrent.*
 interface Logger {
     fun fine(lazyMessage: () -> Any)
     fun info(lazyMessage: () -> Any)
+    fun header(lazyMessage: () -> Any)
     fun warn(lazyMessage: () -> Any)
     fun fail(lazyMessage: () -> Any)
     fun throwable(throwable: Throwable, lazyMessage: () -> Any)
@@ -20,7 +21,7 @@ interface Logger {
 
 abstract class AbstractLogger : Logger {
     var formatter: Formatter = TimestampFormatter(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-    var consumers: MutableList<Consumer> = mutableListOf(ConsoleConsumer())
+    var consumers: MutableSet<Consumer> = mutableSetOf(ConsoleConsumer())
 
     fun addConsumer(consumer: Consumer): AbstractLogger {
         consumers.add(consumer)
@@ -33,6 +34,10 @@ abstract class AbstractLogger : Logger {
 
     override fun info(lazyMessage: () -> Any) {
         log(Level.INFORMATION, lazyMessage)
+    }
+
+    override fun header(lazyMessage: () -> Any) {
+        log(Level.HEADER, lazyMessage)
     }
 
     override fun warn(lazyMessage: () -> Any) {
@@ -68,6 +73,7 @@ private fun Throwable.printStackTraceString(): String {
 enum class Level(val marker: String) {
     FINE("FINE"),
     INFORMATION("INFO"),
+    HEADER("HEADER"),
     WARNING("WARNING"),
     FAILURE("FAILURE")
 }
@@ -102,6 +108,16 @@ class AsynchronousLogger : AbstractLogger() {
         queue.add(LogEntry(level, lazyMessage))
     }
 
+    private fun newSingleThreadDaemonExecutor(): ExecutorService = Executors.newSingleThreadExecutor(object : ThreadFactory {
+        private val delegate = Executors.defaultThreadFactory()
+
+        override fun newThread(r: Runnable): Thread {
+            val thread = delegate.newThread(r)
+            thread.isDaemon = true
+            return thread
+        }
+    })
+
     private inner class Task : Runnable {
         override fun run() {
             while (true) {
@@ -114,16 +130,6 @@ class AsynchronousLogger : AbstractLogger() {
     }
 }
 
-private fun newSingleThreadDaemonExecutor(): ExecutorService = Executors.newSingleThreadExecutor(object : ThreadFactory {
-    private val delegate = Executors.defaultThreadFactory()
-
-    override fun newThread(r: Runnable): Thread {
-        val thread = delegate.newThread(r)
-        thread.isDaemon = true
-        return thread
-    }
-})
-
 class TimestampFormatter(private val formatter: DateTimeFormatter) : Formatter {
     override fun format(entry: LogEntry): String {
         val dateTime = formatter.format(LocalDateTime.now())
@@ -134,14 +140,14 @@ class TimestampFormatter(private val formatter: DateTimeFormatter) : Formatter {
 class ConsoleConsumer : Consumer {
     override fun consume(entry: String, level: Level) {
         when (level) {
-            Level.FINE, Level.INFORMATION, Level.WARNING -> System.out.println(entry)
+            Level.FINE, Level.INFORMATION, Level.HEADER, Level.WARNING -> System.out.println(entry)
             Level.FAILURE -> System.err.println(entry)
         }
     }
 }
 
-class FileConsumer(pathToFile: Path) : Consumer {
-    private val writer = Files.newOutputStream(pathToFile, StandardOpenOption.CREATE, StandardOpenOption.APPEND).writer()
+class FileConsumer(file: Path) : Consumer {
+    private val writer = Files.newOutputStream(file, StandardOpenOption.CREATE, StandardOpenOption.APPEND).writer()
     private val lineSeparator = System.lineSeparator()
 
     override fun consume(entry: String, level: Level) {
