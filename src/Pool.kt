@@ -24,8 +24,11 @@ fun main(args: Array<String>) {
             }
             "--start-horizon" -> {
                 val horizon = Horizon(configuration.horizon)
-                val networkInfo = NetworkInfo(CoreDatabase(configuration.pool, configuration.core))
+                val database = CoreDatabase(configuration.pool, configuration.core)
+                val networkInfo = NetworkInfo(database)
+                val overview = Overview(database)
                 horizon.addEndpoint(networkInfo)
+                        .addEndpoint(overview)
                         .addEndpoint(UsageStatistics(horizon, networkInfo))
                         .listen()
                 return

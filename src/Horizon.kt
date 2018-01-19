@@ -189,6 +189,24 @@ class NetworkInfo(private val database: CoreDatabase) : Endpoint {
     }
 }
 
+class Overview(private val database: CoreDatabase) : Endpoint {
+    override val name = "overview"
+
+    override fun service(parameters: Map<String, String>): Any {
+        val profiler = Profiler()
+        val result: Any = when (parameters["action"]) {
+            "minimumVotes" -> {
+                val circulatingSupply = database.circulatingSupply()
+                Balance.fromCurrency(circulatingSupply / StellarCurrency(2000))
+            }
+            null, "" -> return Problem("You must specify an action.")
+            else -> return Problem("Invalid action.")
+        }
+        val time = profiler.report()
+        return Ok(QueryResult(result, time, TimeUnit.MILLISECONDS))
+    }
+}
+
 private class Profiler {
     private val startTime = System.nanoTime()
 
@@ -199,21 +217,20 @@ private class Profiler {
     }
 }
 
-class UsageStatistics(private val horizon: Horizon, private val networkInfo: NetworkInfo) : Endpoint {
+class UsageStatistics(horizon: Horizon, private val networkInfo: NetworkInfo) : Endpoint {
+    private val horizonServerExecutor by lazy { horizon.server.executor as ThreadPoolExecutor }
+
     override val name = "usage"
 
-    override fun service(parameters: Map<String, String>): Any {
-        val horizonServerExecutor = horizon.server.executor as ThreadPoolExecutor
-        return Usage(
-                horizonServerExecutor.largestPoolSize,
-                Usage.Network(
-                        networkInfo.accountsCount.get(),
-                        networkInfo.circulatingSupply.get(),
-                        networkInfo.totalVotes.get(),
-                        networkInfo.votersCount.get(),
-                        Usage.Network.Summary(
-                                networkInfo.totalRequests.get(),
-                                networkInfo.totalTime.get(),
-                                TimeUnit.MILLISECONDS)))
-    }
+    override fun service(parameters: Map<String, String>) = Usage(
+            horizonServerExecutor.largestPoolSize,
+            Usage.Network(
+                    networkInfo.accountsCount.get(),
+                    networkInfo.circulatingSupply.get(),
+                    networkInfo.totalVotes.get(),
+                    networkInfo.votersCount.get(),
+                    Usage.Network.Summary(
+                            networkInfo.totalRequests.get(),
+                            networkInfo.totalTime.get(),
+                            TimeUnit.MILLISECONDS)))
 }
