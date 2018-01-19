@@ -20,6 +20,7 @@ fun main(args: Array<String>) {
             "--run-inflation" -> {
                 val inflation = Inflation(ProductionNetwork(), configuration.messages.inflation)
                 inflation.run(configuration.bank)
+                return
             }
             "--start-horizon" -> {
                 val horizon = Horizon(configuration.horizon)
@@ -27,10 +28,9 @@ fun main(args: Array<String>) {
                 horizon.addEndpoint(networkInfo)
                         .addEndpoint(UsageStatistics(horizon, networkInfo))
                         .listen()
+                return
             }
-            else -> println("Invalid command.")
         }
-        return
     }
     when (configuration.tests.mode) {
         PRODUCTION -> {
@@ -68,8 +68,7 @@ class CoreDatabase(private val pool: Account, configuration: Configuration.Core)
     init {
         Class.forName("org.postgresql.Driver")
         connection = DriverManager.getConnection(
-                "jdbc:postgresql://${configuration.host}:5432/${configuration.database}",
-                configuration.user, configuration.password)
+                "jdbc:postgresql://${configuration.host}:5432/${configuration.database}", configuration.user, configuration.password)
         connection.autoCommit = false
     }
 
