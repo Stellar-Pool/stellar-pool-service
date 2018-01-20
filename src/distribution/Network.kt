@@ -1,4 +1,4 @@
-package it.menzani.stellarpool
+package it.menzani.stellarpool.distribution
 
 import it.menzani.stellarpool.serialization.parseJson
 import it.menzani.stellarpool.serialization.pool.TransactionResult

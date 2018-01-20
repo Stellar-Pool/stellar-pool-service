@@ -1,9 +1,9 @@
 package it.menzani.stellarpool.serialization.pool;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import it.menzani.stellarpool.Account;
-import it.menzani.stellarpool.Percent;
-import it.menzani.stellarpool.StellarCurrency;
+import it.menzani.stellarpool.distribution.Account;
+import it.menzani.stellarpool.distribution.Percent;
+import it.menzani.stellarpool.distribution.StellarCurrency;
 import it.menzani.stellarpool.serialization.MalformedConfigurationException;
 import org.jetbrains.annotations.NotNull;
 

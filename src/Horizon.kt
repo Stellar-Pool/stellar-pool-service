@@ -1,6 +1,7 @@
 package it.menzani.stellarpool
 
 import com.sun.net.httpserver.*
+import it.menzani.stellarpool.distribution.StellarCurrency
 import it.menzani.stellarpool.logging.FileConsumer
 import it.menzani.stellarpool.logging.Logger
 import it.menzani.stellarpool.logging.SynchronousLogger
@@ -86,10 +87,10 @@ class Horizon(private val configuration: Configuration.Horizon) {
             val parameters: MutableMap<String, String> = mutableMapOf()
             for (pair in query?.split('&') ?: emptyList()) {
                 val entry = pair.split('=')
-                parameters.put(entry[0], if (entry.size == 1) "" else entry[1])
+                parameters[entry[0]] = if (entry.size == 1) "" else entry[1]
             }
 
-            log.fine { "Got request from ${exchange.remoteAddress}" }
+            log.fine { "Serving request from ${exchange.remoteAddress}" }
             val response = doServiceAuthenticated(parameters)
             exchange.responseHeaders.set("Content-Type", "application/json; charset=UTF-8")
             exchange.responseHeaders.set("Access-Control-Allow-Origin", "*")
