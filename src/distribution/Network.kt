@@ -1,6 +1,7 @@
 package it.menzani.stellarpool.distribution
 
-import it.menzani.stellarpool.serialization.parseJson
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import it.menzani.stellarpool.serialization.pool.TransactionResult
 import org.stellar.sdk.*
 import org.stellar.sdk.responses.AccountResponse
@@ -105,6 +106,7 @@ class ProductionNetwork : Network {
     }
 
     private val server = Server("https://horizon.stellar.org")
+    private val mapper = ObjectMapper()
 
     override fun accountOf(keyPair: KeyPair): AccountResponse = server.accounts().account(keyPair)
 
@@ -115,7 +117,7 @@ class ProductionNetwork : Network {
         } catch (e: ConnectException) {
             throw TransactionFailedException("Could not send HTTP command to Stellar Core. Is it running on localhost?", e)
         }
-        val result: TransactionResult = parseJson(stream)
+        val result: TransactionResult = mapper.readValue(stream)
         if (result.status != "PENDING") throw TransactionFailedException(result)
     }
 }

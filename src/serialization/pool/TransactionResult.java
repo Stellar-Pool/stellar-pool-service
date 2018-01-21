@@ -1,8 +1,11 @@
 package it.menzani.stellarpool.serialization.pool;
 
-import it.menzani.stellarpool.serialization.ResourceKt;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public final class TransactionResult {
+    private static final ObjectMapper mapper = new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_NULL);
     private String status;
     private String error;
     private String exception;
@@ -21,6 +24,11 @@ public final class TransactionResult {
 
     @Override
     public String toString() {
-        return ResourceKt.createJson(this);
+        try {
+            return mapper.writeValueAsString(this);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 }

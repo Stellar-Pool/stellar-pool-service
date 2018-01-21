@@ -1,11 +1,11 @@
 package it.menzani.stellarpool
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.sun.net.httpserver.*
 import it.menzani.stellarpool.distribution.StellarCurrency
 import it.menzani.stellarpool.logging.FileConsumer
 import it.menzani.stellarpool.logging.Logger
 import it.menzani.stellarpool.logging.SynchronousLogger
-import it.menzani.stellarpool.serialization.createJson
 import it.menzani.stellarpool.serialization.horizon.*
 import it.menzani.stellarpool.serialization.pool.Configuration
 import java.net.InetSocketAddress
@@ -23,6 +23,7 @@ import javax.net.ssl.TrustManagerFactory
 
 class Horizon(private val configuration: Configuration.Horizon) {
     private val log: Logger = SynchronousLogger().addConsumer(FileConsumer(Paths.get("horizon.log")))
+    private val mapper = ObjectMapper()
     internal val server: HttpServer
 
     init {
@@ -94,7 +95,7 @@ class Horizon(private val configuration: Configuration.Horizon) {
             val response = doServiceAuthenticated(parameters)
             exchange.responseHeaders.set("Content-Type", "application/json; charset=UTF-8")
             exchange.responseHeaders.set("Access-Control-Allow-Origin", "*")
-            exchange.writeBody(createJson(response))
+            exchange.writeBody(mapper.writeValueAsString(response))
             exchange.close()
         }
 
