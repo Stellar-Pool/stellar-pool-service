@@ -17,17 +17,19 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import java.util.stream.Collectors
 import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
 
 class Horizon(private val configuration: Configuration.Horizon) {
     private val log: Logger = SynchronousLogger().addConsumer(FileConsumer(Paths.get("horizon.log")))
+    private val server: HttpServer
+    private val endpoints: MutableList<Endpoint> = mutableListOf() // Ordering is preserved.
     private val mapper = ObjectMapper()
-    internal val server: HttpServer
 
     init {
-        log.header { "Starting Horizon..." }
+        log.header { "Loading Horizon..." }
         val address = InetSocketAddress(configuration.port)
         server = if (configuration.certificate.isSslEnabled) {
             log.info { "HTTPS is enabled." }
@@ -45,6 +47,25 @@ class Horizon(private val configuration: Configuration.Horizon) {
         } else {
             HttpServer.create(address, configuration.backlog)
         }
+        registerCommonEndpoints()
+    }
+
+    private fun registerCommonEndpoints() {
+        addEndpoint(Usage())
+    }
+
+    fun addEndpoint(endpoint: Endpoint): Horizon {
+        log.info { "Registering endpoint: ${endpoint.label()}" }
+        server.createContext(endpoint.path(), Handler(endpoint))
+        endpoints.add(endpoint)
+        return this
+    }
+
+    fun listen() {
+        server.executor = if (configuration.parallelism == 0) Executors.newCachedThreadPool() else
+            Executors.newFixedThreadPool(configuration.parallelism)
+        server.start()
+        log.info { "Horizon has started." }
     }
 
     private class CertificateHandler(sslContext: SSLContext) : HttpsConfigurator(sslContext) {
@@ -56,20 +77,6 @@ class Horizon(private val configuration: Configuration.Horizon) {
             parameters.protocols = sslEngine.enabledProtocols
             parameters.setSSLParameters(sslContext.defaultSSLParameters)
         }
-    }
-
-    fun addEndpoint(endpoint: Endpoint): Horizon {
-        val name = '/' + endpoint.name
-        log.info { "Registering endpoint: $name" }
-        server.createContext(name, Handler(endpoint))
-        return this
-    }
-
-    fun listen() {
-        server.executor = if (configuration.parallelism == 0) Executors.newCachedThreadPool() else
-            Executors.newFixedThreadPool(configuration.parallelism)
-        server.start()
-        log.info { "Horizon has started." }
     }
 
     private inner class Handler(private val endpoint: Endpoint) : HttpHandler {
@@ -91,7 +98,7 @@ class Horizon(private val configuration: Configuration.Horizon) {
                 parameters[entry[0]] = if (entry.size == 1) "" else entry[1]
             }
 
-            log.fine { "Serving request from ${exchange.remoteAddress}" }
+            log.fine { "Got request for ${endpoint.label()} from ${exchange.remoteAddress}" }
             val response = doServiceAuthenticated(parameters)
             exchange.responseHeaders.set("Content-Type", "application/json; charset=UTF-8")
             exchange.responseHeaders.set("Access-Control-Allow-Origin", "*")
@@ -125,7 +132,25 @@ class Horizon(private val configuration: Configuration.Horizon) {
         }
     }
 
-    private inner class Stop : Endpoint {
+    private interface CommonEndpoint : Endpoint {
+        override fun label() = super.label() + " [Built-in]"
+    }
+
+    private inner class Usage : CommonEndpoint {
+        private val endpoints by lazy {
+            this@Horizon.endpoints.filterIsInstance<RequestTrackingEndpoint>()
+        }
+        override val name = "usage"
+
+        override fun service(parameters: Map<String, String>): Any {
+            val executor = server.executor as ThreadPoolExecutor
+            return Usage(executor.largestPoolSize, endpoints.stream()
+                    .map { endpoint -> it.menzani.stellarpool.serialization.horizon.Usage.Endpoint(endpoint.name, endpoint.usageDescriptor()) }
+                    .collect(Collectors.toList()))
+        }
+    }
+
+    private inner class Stop : CommonEndpoint {
         override val name = "stop"
 
         override fun service(parameters: Map<String, String>): Any {
@@ -145,68 +170,43 @@ class Horizon(private val configuration: Configuration.Horizon) {
 interface Endpoint {
     val name: String
     fun service(parameters: Map<String, String>): Any
+
+    fun path() = '/' + name
+
+    /**
+     * Equivalent to `toString()`.
+     */
+    fun label() = path()
 }
 
-class NetworkInfo(private val database: CoreDatabase) : Endpoint {
-    internal val totalRequests = AtomicLong()
-    internal val totalTime = AtomicLong()
-
-    internal val accountsCount = AtomicLong()
-    internal val circulatingSupply = AtomicLong()
-    internal val totalVotes = AtomicLong()
-    internal val votersCount = AtomicLong()
-
-    override val name = "network"
+abstract class RequestTrackingEndpoint : Endpoint {
+    private val totalRequests = AtomicLong()
 
     override fun service(parameters: Map<String, String>): Any {
         totalRequests.incrementAndGet()
-        val profiler = Profiler()
-        val result: Any = when (parameters["action"]) {
-            "countAccounts" -> {
-                accountsCount.incrementAndGet()
-                val accountsCount = database.countAccounts()
-                accountsCount
-            }
-            "circulatingSupply" -> {
-                circulatingSupply.incrementAndGet()
-                val circulatingSupply = database.circulatingSupply()
-                Balance.fromCurrency(circulatingSupply)
-            }
-            "totalVotes" -> {
-                totalVotes.incrementAndGet()
-                val totalVotes = database.totalVotes()
-                Balance.fromCurrency(totalVotes)
-            }
-            "countVoters" -> {
-                votersCount.incrementAndGet()
-                val votersCount = database.countVoters()
-                votersCount
-            }
-            null, "" -> return Problem("You must specify an action.")
-            else -> return Problem("Invalid action.")
-        }
-        val time = profiler.report()
-        totalTime.addAndGet(time)
-        return Ok(QueryResult(result, time, TimeUnit.MILLISECONDS))
+        return doService(parameters)
     }
+
+    abstract fun doService(parameters: Map<String, String>): Any
+
+    open fun usageDescriptor() = Usage.Endpoint.Descriptor(totalRequests.get())
 }
 
-class Overview(private val database: CoreDatabase) : Endpoint {
-    override val name = "overview"
+abstract class ProfiledEndpoint : RequestTrackingEndpoint() {
+    private val totalTime = AtomicLong()
 
     override fun service(parameters: Map<String, String>): Any {
         val profiler = Profiler()
-        val result: Any = when (parameters["action"]) {
-            "minimumVotes" -> {
-                val circulatingSupply = database.circulatingSupply()
-                Balance.fromCurrency(circulatingSupply / StellarCurrency(2000))
-            }
-            null, "" -> return Problem("You must specify an action.")
-            else -> return Problem("Invalid action.")
-        }
-        val time = profiler.report()
-        return Ok(QueryResult(result, time, TimeUnit.MILLISECONDS))
+        val result: Any = super.service(parameters)
+        val executionTime = profiler.report()
+        totalTime.addAndGet(executionTime)
+
+        return result as? Problem ?: Ok(ProfiledEndpointResult(result, executionTime, TimeUnit.MILLISECONDS))
     }
+
+    abstract override fun doService(parameters: Map<String, String>): Any
+
+    override fun usageDescriptor(): Usage.Endpoint.Descriptor = super.usageDescriptor().setTotalTime(totalTime.get(), TimeUnit.MILLISECONDS)
 }
 
 private class Profiler {
@@ -219,20 +219,33 @@ private class Profiler {
     }
 }
 
-class UsageStatistics(horizon: Horizon, private val networkInfo: NetworkInfo) : Endpoint {
-    private val horizonServerExecutor by lazy { horizon.server.executor as ThreadPoolExecutor }
+class AccountsCount(private val database: CoreDatabase) : ProfiledEndpoint() {
+    override val name = "network/accounts-count"
 
-    override val name = "usage"
+    override fun doService(parameters: Map<String, String>) = database.countAccounts()
+}
 
-    override fun service(parameters: Map<String, String>) = Usage(
-            horizonServerExecutor.largestPoolSize,
-            Usage.Network(
-                    networkInfo.accountsCount.get(),
-                    networkInfo.circulatingSupply.get(),
-                    networkInfo.totalVotes.get(),
-                    networkInfo.votersCount.get(),
-                    Usage.Network.Summary(
-                            networkInfo.totalRequests.get(),
-                            networkInfo.totalTime.get(),
-                            TimeUnit.MILLISECONDS)))
+class CirculatingSupply(private val database: CoreDatabase) : ProfiledEndpoint() {
+    override val name = "network/circulating-supply"
+
+    override fun doService(parameters: Map<String, String>) = Balance.fromCurrency(database.circulatingSupply())
+}
+
+class TotalVotes(private val database: CoreDatabase) : ProfiledEndpoint() {
+    override val name = "network/total-votes"
+
+    override fun doService(parameters: Map<String, String>) = Balance.fromCurrency(database.totalVotes())
+}
+
+class VotersCount(private val database: CoreDatabase) : ProfiledEndpoint() {
+    override val name = "network/voters-count"
+
+    override fun doService(parameters: Map<String, String>) = database.countVoters()
+}
+
+class MinimumVotes(private val database: CoreDatabase) : ProfiledEndpoint() {
+    override val name = "overview/minimum-votes"
+
+    override fun doService(parameters: Map<String, String>) = Balance.fromCurrency(
+            database.circulatingSupply() / StellarCurrency(2000))
 }

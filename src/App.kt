@@ -19,11 +19,11 @@ fun main(args: Array<String>) {
             "--start-horizon" -> {
                 val horizon = Horizon(configuration.horizon)
                 val database = CoreDatabase(configuration.pool, configuration.core)
-                val networkInfo = NetworkInfo(database)
-                val overview = Overview(database)
-                horizon.addEndpoint(networkInfo)
-                        .addEndpoint(overview)
-                        .addEndpoint(UsageStatistics(horizon, networkInfo))
+                horizon.addEndpoint(AccountsCount(database))
+                        .addEndpoint(CirculatingSupply(database))
+                        .addEndpoint(TotalVotes(database))
+                        .addEndpoint(VotersCount(database))
+                        .addEndpoint(MinimumVotes(database))
                         .listen()
                 return
             }
