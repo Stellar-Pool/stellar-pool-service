@@ -25,7 +25,7 @@ import javax.net.ssl.TrustManagerFactory
 class Horizon(private val configuration: Configuration.Horizon) {
     private val log: Logger = SynchronousLogger().addConsumer(FileConsumer(Paths.get("horizon.log")))
     private val server: HttpServer
-    private val endpoints: MutableList<Endpoint> = mutableListOf() // Ordering is preserved.
+    private val monitoredEndpoints: MutableList<MonitoredEndpoint> = mutableListOf() // Ordering is preserved.
     private val mapper = ObjectMapper()
 
     init {
@@ -54,10 +54,10 @@ class Horizon(private val configuration: Configuration.Horizon) {
         addEndpoint(Usage())
     }
 
-    fun addEndpoint(endpoint: Endpoint): Horizon {
-        log.info { "Registering endpoint: ${endpoint.label()}" }
+    fun addEndpoint(endpoint: AbstractEndpoint): Horizon {
+        log.info { "Registering endpoint: $endpoint" }
         server.createContext(endpoint.path(), Handler(endpoint))
-        endpoints.add(endpoint)
+        if (endpoint is MonitoredEndpoint) monitoredEndpoints.add(endpoint)
         return this
     }
 
@@ -98,7 +98,7 @@ class Horizon(private val configuration: Configuration.Horizon) {
                 parameters[entry[0]] = if (entry.size == 1) "" else entry[1]
             }
 
-            log.fine { "Got request for ${endpoint.label()} from ${exchange.remoteAddress}" }
+            log.fine { "Got request for $endpoint from ${exchange.remoteAddress}" }
             val response = doServiceAuthenticated(parameters)
             exchange.responseHeaders.set("Content-Type", "application/json; charset=UTF-8")
             exchange.responseHeaders.set("Access-Control-Allow-Origin", "*")
@@ -132,25 +132,22 @@ class Horizon(private val configuration: Configuration.Horizon) {
         }
     }
 
-    private interface CommonEndpoint : Endpoint {
-        override fun label() = super.label() + " [Built-in]"
+    private abstract class CommonEndpoint : AbstractEndpoint() {
+        override fun toString() = super.toString() + " [Built-in]"
     }
 
-    private inner class Usage : CommonEndpoint {
-        private val endpoints by lazy {
-            this@Horizon.endpoints.filterIsInstance<RequestTrackingEndpoint>()
-        }
+    private inner class Usage : CommonEndpoint() {
         override val name = "usage"
 
         override fun service(parameters: Map<String, String>): Any {
             val executor = server.executor as ThreadPoolExecutor
-            return Usage(executor.largestPoolSize, endpoints.stream()
+            return Usage(executor.largestPoolSize, monitoredEndpoints.stream()
                     .map { endpoint -> it.menzani.stellarpool.serialization.horizon.Usage.Endpoint(endpoint.name, endpoint.usageDescriptor()) }
                     .collect(Collectors.toList()))
         }
     }
 
-    private inner class Stop : CommonEndpoint {
+    private inner class Stop : CommonEndpoint() {
         override val name = "stop"
 
         override fun service(parameters: Map<String, String>): Any {
@@ -170,16 +167,18 @@ class Horizon(private val configuration: Configuration.Horizon) {
 interface Endpoint {
     val name: String
     fun service(parameters: Map<String, String>): Any
-
-    fun path() = '/' + name
-
-    /**
-     * Equivalent to `toString()`.
-     */
-    fun label() = path()
 }
 
-abstract class RequestTrackingEndpoint : Endpoint {
+abstract class AbstractEndpoint : Endpoint {
+    fun path() = '/' + name
+    override fun toString() = path()
+}
+
+abstract class MonitoredEndpoint : AbstractEndpoint() {
+    abstract fun usageDescriptor(): Usage.Endpoint.Descriptor
+}
+
+abstract class RequestTrackingEndpoint : MonitoredEndpoint() {
     private val totalRequests = AtomicLong()
 
     override fun service(parameters: Map<String, String>): Any {
@@ -189,7 +188,7 @@ abstract class RequestTrackingEndpoint : Endpoint {
 
     abstract fun doService(parameters: Map<String, String>): Any
 
-    open fun usageDescriptor() = Usage.Endpoint.Descriptor(totalRequests.get())
+    override fun usageDescriptor() = Usage.Endpoint.Descriptor(totalRequests.get())
 }
 
 abstract class ProfiledEndpoint : RequestTrackingEndpoint() {
@@ -206,7 +205,7 @@ abstract class ProfiledEndpoint : RequestTrackingEndpoint() {
 
     abstract override fun doService(parameters: Map<String, String>): Any
 
-    override fun usageDescriptor(): Usage.Endpoint.Descriptor = super.usageDescriptor().setTotalTime(totalTime.get(), TimeUnit.MILLISECONDS)
+    override fun usageDescriptor() = super.usageDescriptor().setTotalTime(totalTime.get(), TimeUnit.MILLISECONDS)
 }
 
 private class Profiler {
