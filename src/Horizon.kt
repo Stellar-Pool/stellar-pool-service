@@ -99,7 +99,7 @@ class Horizon(private val configuration: Configuration.Horizon) {
             }
 
             log.fine { "Got request for $endpoint from ${exchange.remoteAddress}" }
-            val response = doServiceAuthenticated(parameters)
+            val response = doServiceAuthenticated(Endpoint.Parameters(parameters))
             exchange.responseHeaders.set("Content-Type", "application/json; charset=UTF-8")
             exchange.responseHeaders.set("Access-Control-Allow-Origin", "*")
             exchange.writeBody(mapper.writeValueAsString(response))
@@ -114,7 +114,7 @@ class Horizon(private val configuration: Configuration.Horizon) {
             }
         }
 
-        private fun doServiceAuthenticated(parameters: Map<String, String>): Any {
+        private fun doServiceAuthenticated(parameters: Endpoint.Parameters): Any {
             if (configuration.password.isEmpty()) {
                 return endpoint.service(parameters)
             }
@@ -139,7 +139,7 @@ class Horizon(private val configuration: Configuration.Horizon) {
     private inner class Usage : CommonEndpoint() {
         override val name = "usage"
 
-        override fun service(parameters: Map<String, String>): Any {
+        override fun service(parameters: Endpoint.Parameters): Any {
             val executor = server.executor as ThreadPoolExecutor
             return Usage(executor.largestPoolSize, monitoredEndpoints.stream()
                     .map { endpoint -> it.menzani.stellarpool.serialization.horizon.Usage.Endpoint(endpoint.name, endpoint.usageDescriptor()) }
@@ -150,7 +150,7 @@ class Horizon(private val configuration: Configuration.Horizon) {
     private inner class Stop : CommonEndpoint() {
         override val name = "stop"
 
-        override fun service(parameters: Map<String, String>): Any {
+        override fun service(parameters: Endpoint.Parameters): Any {
             val message = "Stopping..."
             log.info { message }
             val executor = server.executor as ExecutorService
@@ -166,7 +166,9 @@ class Horizon(private val configuration: Configuration.Horizon) {
 
 interface Endpoint {
     val name: String
-    fun service(parameters: Map<String, String>): Any
+    fun service(parameters: Parameters): Any
+
+    class Parameters(delegate: Map<String, String>) : Map<String, String> by delegate
 }
 
 abstract class AbstractEndpoint : Endpoint {
@@ -181,12 +183,12 @@ abstract class MonitoredEndpoint : AbstractEndpoint() {
 abstract class RequestTrackingEndpoint : MonitoredEndpoint() {
     private val totalRequests = AtomicLong()
 
-    override fun service(parameters: Map<String, String>): Any {
+    override fun service(parameters: Endpoint.Parameters): Any {
         totalRequests.incrementAndGet()
         return doService(parameters)
     }
 
-    abstract fun doService(parameters: Map<String, String>): Any
+    abstract fun doService(parameters: Endpoint.Parameters): Any
 
     override fun usageDescriptor() = Usage.Endpoint.Descriptor(totalRequests.get())
 }
@@ -194,7 +196,7 @@ abstract class RequestTrackingEndpoint : MonitoredEndpoint() {
 abstract class ProfiledEndpoint : RequestTrackingEndpoint() {
     private val totalTime = AtomicLong()
 
-    override fun service(parameters: Map<String, String>): Any {
+    override fun service(parameters: Endpoint.Parameters): Any {
         val profiler = Profiler()
         val result: Any = super.service(parameters)
         val executionTime = profiler.report()
@@ -203,48 +205,48 @@ abstract class ProfiledEndpoint : RequestTrackingEndpoint() {
         return result as? Problem ?: Ok(ProfiledEndpointResult(result, executionTime, TimeUnit.MILLISECONDS))
     }
 
-    abstract override fun doService(parameters: Map<String, String>): Any
+    abstract override fun doService(parameters: Endpoint.Parameters): Any
 
     override fun usageDescriptor() = super.usageDescriptor().setTotalTime(totalTime.get(), TimeUnit.MILLISECONDS)
-}
 
-private class Profiler {
-    private val startTime = System.nanoTime()
+    private class Profiler {
+        private val startTime = System.nanoTime()
 
-    fun report(): Long {
-        val endTime = System.nanoTime()
-        val executionTime = endTime - startTime
-        return executionTime / 1_000_000
+        fun report(): Long {
+            val endTime = System.nanoTime()
+            val executionTime = endTime - startTime
+            return executionTime / 1_000_000
+        }
     }
 }
 
 class AccountsCount(private val database: CoreDatabase) : ProfiledEndpoint() {
     override val name = "network/accounts-count"
 
-    override fun doService(parameters: Map<String, String>) = database.countAccounts()
+    override fun doService(parameters: Endpoint.Parameters) = database.countAccounts()
 }
 
 class CirculatingSupply(private val database: CoreDatabase) : ProfiledEndpoint() {
     override val name = "network/circulating-supply"
 
-    override fun doService(parameters: Map<String, String>) = Balance.fromCurrency(database.circulatingSupply())
+    override fun doService(parameters: Endpoint.Parameters) = Balance.fromCurrency(database.circulatingSupply())
 }
 
 class TotalVotes(private val database: CoreDatabase) : ProfiledEndpoint() {
     override val name = "network/total-votes"
 
-    override fun doService(parameters: Map<String, String>) = Balance.fromCurrency(database.totalVotes())
+    override fun doService(parameters: Endpoint.Parameters) = Balance.fromCurrency(database.totalVotes())
 }
 
 class VotersCount(private val database: CoreDatabase) : ProfiledEndpoint() {
     override val name = "network/voters-count"
 
-    override fun doService(parameters: Map<String, String>) = database.countVoters()
+    override fun doService(parameters: Endpoint.Parameters) = database.countVoters()
 }
 
 class MinimumVotes(private val database: CoreDatabase) : ProfiledEndpoint() {
     override val name = "overview/minimum-votes"
 
-    override fun doService(parameters: Map<String, String>) = Balance.fromCurrency(
+    override fun doService(parameters: Endpoint.Parameters) = Balance.fromCurrency(
             database.circulatingSupply() / StellarCurrency(2000))
 }

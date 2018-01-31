@@ -50,7 +50,7 @@ abstract class AbstractLogger : Logger {
 
     override fun throwable(throwable: Throwable, lazyMessage: () -> Any) {
         fail(lazyMessage)
-        fail({ throwable.printStackTraceString() })
+        fail { throwable.printStackTraceString() }
     }
 
     override fun log(level: Level, lazyMessage: () -> Any) {
