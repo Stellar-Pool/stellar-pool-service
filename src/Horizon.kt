@@ -8,7 +8,10 @@ import it.menzani.stellarpool.logging.Logger
 import it.menzani.stellarpool.logging.SynchronousLogger
 import it.menzani.stellarpool.serialization.horizon.*
 import it.menzani.stellarpool.serialization.pool.Configuration
+import java.net.HttpURLConnection
 import java.net.InetSocketAddress
+import java.net.URL
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.security.KeyStore
@@ -99,10 +102,10 @@ class Horizon(private val configuration: Configuration.Horizon) {
             }
 
             log.fine { "Got request for $endpoint from ${exchange.remoteAddress}" }
-            val response = doServiceAuthenticated(Endpoint.Parameters(parameters))
+            val response = doServiceAuthenticated(Endpoint.Parameters(parameters, exchange.requestURI.rawQuery ?: ""))
             exchange.responseHeaders.set("Content-Type", "application/json; charset=UTF-8")
             exchange.responseHeaders.set("Access-Control-Allow-Origin", "*")
-            exchange.writeBody(mapper.writeValueAsString(response))
+            exchange.writeBody(response as? String ?: mapper.writeValueAsString(response))
             exchange.close()
         }
 
@@ -168,11 +171,12 @@ interface Endpoint {
     val name: String
     fun service(parameters: Parameters): Any
 
-    class Parameters(delegate: Map<String, String>) : Map<String, String> by delegate
+    class Parameters(structured: Map<String, String>, val raw: String) : Map<String, String> by structured
 }
 
 abstract class AbstractEndpoint : Endpoint {
     fun path() = '/' + name
+
     override fun toString() = path()
 }
 
@@ -249,4 +253,33 @@ class MinimumVotes(private val database: CoreDatabase) : ProfiledEndpoint() {
 
     override fun doService(parameters: Endpoint.Parameters) = Balance.fromCurrency(
             database.circulatingSupply() / StellarCurrency(2000))
+}
+
+const val GRAPH_QL = "graphql"
+
+class PostGraphile(private val network: Network) : AbstractEndpoint() {
+    override val name = GRAPH_QL + network.suffix
+
+    override fun service(parameters: Endpoint.Parameters): Any {
+        val connection = URL("http://localhost:${network.port}/$GRAPH_QL").openConnection() as HttpURLConnection
+        connection.requestMethod = "POST"
+        connection.doOutput = true
+        connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+        val query = parameters.raw.toByteArray(StandardCharsets.UTF_8)
+        connection.setFixedLengthStreamingMode(query.size)
+        connection.connect()
+        connection.outputStream.use {
+            it.write(query)
+        }
+        connection.responseCode // Ensure that we have connected to the server. Needed to update the value of `HttpURLConnection#errorStream`.
+        val stream = connection.errorStream ?: connection.inputStream
+        return stream.use {
+            it.readBytes().toString(StandardCharsets.UTF_8)
+        }
+    }
+
+    enum class Network(internal val suffix: String, internal val port: Short) {
+        PRODUCTION("", 5000),
+        TEST("-testnet", 5001)
+    }
 }

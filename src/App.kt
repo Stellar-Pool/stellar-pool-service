@@ -24,6 +24,8 @@ fun main(args: Array<String>) {
                         .addEndpoint(TotalVotes(database))
                         .addEndpoint(VotersCount(database))
                         .addEndpoint(MinimumVotes(database))
+                        .addEndpoint(PostGraphile(PostGraphile.Network.PRODUCTION))
+                        .addEndpoint(PostGraphile(PostGraphile.Network.TEST))
                         .listen()
                 return
             }
