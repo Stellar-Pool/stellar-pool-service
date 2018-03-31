@@ -119,19 +119,25 @@ class Horizon(private val configuration: Configuration.Horizon) {
 
         private fun doServiceAuthenticated(parameters: Endpoint.Parameters): Any {
             if (configuration.password.isEmpty()) {
-                return endpoint.service(parameters)
+                return doService(parameters)
             }
             if ("password" !in parameters) return Problem("You must specify a password.")
-            if (parameters["password"] == configuration.password) return try {
+            if (parameters["password"] == configuration.password) {
+                return doService(parameters)
+            }
+            val message = "Authentication failed."
+            log.warn { message }
+            return Problem(message)
+        }
+
+        private fun doService(parameters: Endpoint.Parameters): Any {
+            return try {
                 endpoint.service(parameters)
             } catch (e: Throwable) {
                 val message = "An error occurred while calculating the response."
                 log.throwable(e, { message })
                 Problem(message)
             }
-            val message = "Authentication failed."
-            log.warn { message }
-            return Problem(message)
         }
     }
 
@@ -175,7 +181,7 @@ interface Endpoint {
 }
 
 abstract class AbstractEndpoint : Endpoint {
-    fun path() = '/' + name
+    fun path() = "/$name"
 
     override fun toString() = path()
 }
@@ -209,8 +215,6 @@ abstract class ProfiledEndpoint : RequestTrackingEndpoint() {
         return result as? Problem ?: Ok(ProfiledEndpointResult(result, executionTime, TimeUnit.MILLISECONDS))
     }
 
-    abstract override fun doService(parameters: Endpoint.Parameters): Any
-
     override fun usageDescriptor() = super.usageDescriptor().setTotalTime(totalTime.get(), TimeUnit.MILLISECONDS)
 
     private class Profiler {
@@ -219,7 +223,7 @@ abstract class ProfiledEndpoint : RequestTrackingEndpoint() {
         fun report(): Long {
             val endTime = System.nanoTime()
             val executionTime = endTime - startTime
-            return executionTime / 1_000_000
+            return executionTime / 1_000_000L
         }
     }
 }
