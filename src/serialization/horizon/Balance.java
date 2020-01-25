@@ -1,7 +1,7 @@
-package it.menzani.stellarpool.serialization.horizon;
+package net.stellarpool.serialization.horizon;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import it.menzani.stellarpool.distribution.StellarCurrency;
+import net.stellarpool.distribution.StellarCurrency;
 import org.jetbrains.annotations.NotNull;
 
 import java.math.BigDecimal;

@@ -1,4 +1,4 @@
-package it.menzani.stellarpool.serialization.horizon;
+package net.stellarpool.serialization.horizon;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonInclude;

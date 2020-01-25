@@ -1,4 +1,4 @@
-package it.menzani.stellarpool.serialization.pool;
+package net.stellarpool.serialization.pool;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;

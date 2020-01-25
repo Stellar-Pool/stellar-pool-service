@@ -1,9 +1,9 @@
-package it.menzani.stellarpool.distribution
+package net.stellarpool.distribution
 
-import it.menzani.stellarpool.CoreDatabase
-import it.menzani.stellarpool.distribution.Pool.Relation.*
-import it.menzani.stellarpool.serialization.MalformedConfigurationException
-import it.menzani.stellarpool.serialization.pool.Configuration
+import net.stellarpool.CoreDatabase
+import net.stellarpool.distribution.Pool.Relation.*
+import net.stellarpool.serialization.MalformedConfigurationException
+import net.stellarpool.serialization.pool.Configuration
 import java.text.DecimalFormat
 import java.text.NumberFormat
 import java.util.*

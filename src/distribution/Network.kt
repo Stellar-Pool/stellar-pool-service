@@ -1,8 +1,8 @@
-package it.menzani.stellarpool.distribution
+package net.stellarpool.distribution
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import it.menzani.stellarpool.serialization.pool.TransactionResult
+import net.stellarpool.serialization.pool.TransactionResult
 import org.stellar.sdk.*
 import org.stellar.sdk.responses.AccountResponse
 import org.stellar.sdk.responses.SubmitTransactionResponse

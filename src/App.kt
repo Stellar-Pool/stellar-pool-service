@@ -1,9 +1,9 @@
-package it.menzani.stellarpool
+package net.stellarpool
 
-import it.menzani.stellarpool.distribution.*
-import it.menzani.stellarpool.serialization.ConfigurationFile
-import it.menzani.stellarpool.serialization.pool.Configuration
-import it.menzani.stellarpool.serialization.pool.Configuration.Tests.Mode.*
+import net.stellarpool.distribution.*
+import net.stellarpool.serialization.ConfigurationFile
+import net.stellarpool.serialization.pool.Configuration
+import net.stellarpool.serialization.pool.Configuration.Tests.Mode.*
 import java.sql.Connection
 import java.sql.DriverManager
 

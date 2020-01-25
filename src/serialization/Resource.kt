@@ -1,8 +1,8 @@
-package it.menzani.stellarpool.serialization
+package net.stellarpool.serialization
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import it.menzani.stellarpool.serialization.pool.Configuration
+import net.stellarpool.serialization.pool.Configuration
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -10,7 +10,7 @@ import java.nio.file.Paths
 enum class Resources(private val resourceName: String) {
     DEFAULT_CONFIG("config.json");
 
-    private val resource = ClassLoader.getSystemResource("it/menzani/stellarpool/$resourceName")
+    private val resource = ClassLoader.getSystemResource("net/stellarpool/$resourceName")
 
     fun bytes() = resource.readBytes()
 

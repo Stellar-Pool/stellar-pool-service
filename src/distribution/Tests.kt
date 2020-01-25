@@ -1,7 +1,7 @@
-package it.menzani.stellarpool.distribution
+package net.stellarpool.distribution
 
-import it.menzani.stellarpool.distribution.TestAccounts.destinationKeys
-import it.menzani.stellarpool.distribution.TestAccounts.sourceKeys
+import net.stellarpool.distribution.TestAccounts.destinationKeys
+import net.stellarpool.distribution.TestAccounts.sourceKeys
 import org.stellar.sdk.KeyPair
 import org.stellar.sdk.responses.AccountResponse
 

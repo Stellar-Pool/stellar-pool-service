@@ -1,4 +1,4 @@
-package it.menzani.stellarpool.serialization.horizon;
+package net.stellarpool.serialization.horizon;
 
 public enum Status {
     SUCCESS,

@@ -1,13 +1,13 @@
-package it.menzani.stellarpool
+package net.stellarpool
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.sun.net.httpserver.*
-import it.menzani.stellarpool.distribution.StellarCurrency
-import it.menzani.stellarpool.logging.FileConsumer
-import it.menzani.stellarpool.logging.Logger
-import it.menzani.stellarpool.logging.SynchronousLogger
-import it.menzani.stellarpool.serialization.horizon.*
-import it.menzani.stellarpool.serialization.pool.Configuration
+import net.stellarpool.distribution.StellarCurrency
+import net.stellarpool.logging.FileConsumer
+import net.stellarpool.logging.Logger
+import net.stellarpool.logging.SynchronousLogger
+import net.stellarpool.serialization.horizon.*
+import net.stellarpool.serialization.pool.Configuration
 import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.URL
@@ -151,7 +151,7 @@ class Horizon(private val configuration: Configuration.Horizon) {
         override fun service(parameters: Endpoint.Parameters): Any {
             val executor = server.executor as ThreadPoolExecutor
             return Usage(executor.largestPoolSize, monitoredEndpoints.stream()
-                    .map { endpoint -> it.menzani.stellarpool.serialization.horizon.Usage.Endpoint(endpoint.name, endpoint.usageDescriptor()) }
+                    .map { endpoint -> net.stellarpool.serialization.horizon.Usage.Endpoint(endpoint.name, endpoint.usageDescriptor()) }
                     .collect(Collectors.toList()))
         }
     }

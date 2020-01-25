@@ -1,10 +1,10 @@
-package it.menzani.stellarpool.serialization.pool;
+package net.stellarpool.serialization.pool;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import it.menzani.stellarpool.distribution.Account;
-import it.menzani.stellarpool.distribution.Percent;
-import it.menzani.stellarpool.distribution.StellarCurrency;
-import it.menzani.stellarpool.serialization.MalformedConfigurationException;
+import net.stellarpool.distribution.Account;
+import net.stellarpool.distribution.Percent;
+import net.stellarpool.distribution.StellarCurrency;
+import net.stellarpool.serialization.MalformedConfigurationException;
 import org.jetbrains.annotations.NotNull;
 
 import java.nio.file.Path;

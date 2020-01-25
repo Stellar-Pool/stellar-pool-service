@@ -1,4 +1,4 @@
-package it.menzani.stellarpool.logging
+package net.stellarpool.logging
 
 import java.io.PrintWriter
 import java.io.StringWriter

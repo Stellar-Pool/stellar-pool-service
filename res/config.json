@@ -41,7 +41,7 @@
       "This element's field": "Configure and run tests.",
       "mode_1": "PRODUCTION: Uses the pool field. Requires the prize to be specified by the user.",
       "mode_2": "TEST_POOL: Uses the tests.testPool field, and a randomly-generated prize.",
-      "mode_3": "MAINNET_PAYMENT: Only runs it.menzani.stellarpool.NetworkKt.singleMainnetPayment().",
+      "mode_3": "MAINNET_PAYMENT: Only runs net.stellarpool.distribution.TestsKt.singleMainnetPayment().",
       "testPool": "ID of the account that acts as the inflation pool when tests.mode is set to TEST_POOL."
     },
     "safetyThresholds": {
